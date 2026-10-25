@@ -2,6 +2,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://agricotton-ai-project.onrender.com/api/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
