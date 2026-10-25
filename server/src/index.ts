@@ -15,7 +15,7 @@ import fertilizerRoutes from './routes/fertilizerRoutes.js';
 import cottonIssueRoutes from './routes/cottonIssueRoutes.js';
 import { seedCottonIssues } from './data/seedCottonIssues.js';
 import calendarRoutes from './routes/calendarRoutes.js';
-import { ensureDomainIndexes } from './data/mongoStore.js';
+import { ensureDomainIndexes, mongoIsReady } from './data/mongoStore.js';
 
 const app = express();
 
@@ -25,7 +25,12 @@ app.use(cookieParser());
 app.use(morgan('dev'));
 
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'agri-cotton-ai-server' });
+  // `persistence` lets the UI warn when saves are memory-only (no MongoDB).
+  res.json({
+    status: 'ok',
+    service: 'agri-cotton-ai-server',
+    persistence: mongoIsReady() ? 'mongodb' : 'memory',
+  });
 });
 
 app.use('/api/auth', authRoutes);

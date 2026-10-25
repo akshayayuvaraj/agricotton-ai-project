@@ -4,6 +4,7 @@ import { memoryDb } from "../data/store.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import {
   calculatePolygonArea,
+  type GeoPolygon,
   validatePolygonGeometry,
   validateZoneInsideField,
   zonesOverlap,
@@ -45,13 +46,16 @@ export const createZone = async (req: AuthenticatedRequest, res: Response) => {
     return res.status(404).json({ message: "Field not found." });
   }
 
+  // Phase 1: validate geometry. Anything thrown here is the caller's fault.
+  let zone;
   try {
     const zonePolygon = validatePolygonGeometry(polygon);
     validateZoneInsideField(zonePolygon, field.boundary);
     if (
       memoryDb.zones.some(
-        (zone) =>
-          zone.fieldId === fieldId && zonesOverlap(zone.polygon, zonePolygon),
+        (existing) =>
+          existing.fieldId === fieldId &&
+          zonesOverlap(existing.polygon, zonePolygon),
       )
     ) {
       return res
@@ -59,8 +63,7 @@ export const createZone = async (req: AuthenticatedRequest, res: Response) => {
         .json({ message: "Zone overlaps an existing zone in this field." });
     }
     const area = calculatePolygonArea(zonePolygon);
-
-    const zone = {
+    zone = {
       id: randomUUID(),
       userId: userId ?? "",
       fieldId: String(fieldId),
@@ -75,18 +78,21 @@ export const createZone = async (req: AuthenticatedRequest, res: Response) => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Invalid zone geometry.";
+    return res.status(400).json({ message });
+  }
 
+  // Phase 2: persist. A failure here is a server/database problem (500), never
+  // reported as success and never mistaken for a validation error.
+  try {
     if (mongoIsReady()) await saveDomainRecord("zones", zone);
     memoryDb.zones.push(zone);
     return res.status(201).json({ zone });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Invalid zone geometry.";
-    if (mongoIsReady() && !/polygon|zone overlaps|field/i.test(message)) {
-      console.error("Unable to persist management zone.", error);
-      return res.status(500).json({ message: "Unable to save the zone right now." });
-    }
-    return res.status(400).json({ message });
+    console.error("Unable to persist management zone.", error);
+    return res.status(500).json({ message: "Unable to save the zone right now." });
   }
 };
 
@@ -119,9 +125,10 @@ export const createZonesBatch = async (req: AuthenticatedRequest, res: Response)
     });
   }
 
+  let createdZones;
   try {
     const names = new Set<string>();
-    const createdZones = requestedZones.map(
+    createdZones = requestedZones.map(
       (requested: Record<string, unknown>) => {
         if (
           typeof requested.name !== "string" ||
@@ -177,7 +184,8 @@ export const createZonesBatch = async (req: AuthenticatedRequest, res: Response)
     }
     const fieldArea = calculatePolygonArea(field.boundary).hectares;
     const totalArea = createdZones.reduce(
-      (sum, zone) => sum + calculatePolygonArea(zone.polygon).hectares,
+      (sum: number, zone: { polygon: GeoPolygon }) =>
+        sum + calculatePolygonArea(zone.polygon).hectares,
       0,
     );
     const difference = Math.abs(fieldArea - totalArea);
@@ -187,22 +195,25 @@ export const createZonesBatch = async (req: AuthenticatedRequest, res: Response)
         `Generated zones differ from field coverage by ${difference.toFixed(4)} ha; allowed tolerance is ${tolerance.toFixed(4)} ha.`,
       );
     }
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Generated zone geometry is invalid.";
+    return res.status(400).json({ message });
+  }
 
+  try {
     if (mongoIsReady()) {
       await insertDomainRecords("zones", createdZones);
     }
     memoryDb.zones.push(...createdZones);
     return res.status(201).json({ zones: createdZones });
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Generated zone geometry is invalid.";
-    if (mongoIsReady() && !/polygon|zone|coverage|overlap|field|generated/i.test(message)) {
-      console.error("Unable to persist generated management zones.", error);
-      return res.status(500).json({ message: "Unable to save generated zones right now." });
-    }
-    return res.status(400).json({ message });
+    console.error("Unable to persist generated management zones.", error);
+    return res
+      .status(500)
+      .json({ message: "Unable to save generated zones right now." });
   }
 };
 
@@ -214,10 +225,23 @@ export const updateZone = async (req: AuthenticatedRequest, res: Response) => {
     return res.status(404).json({ message: "Zone not found." });
   }
 
+  const { name, color, polygon: requestedPolygon, notes } = req.body;
+  if (
+    name !== undefined &&
+    (typeof name !== "string" || name.trim().length === 0)
+  ) {
+    return res.status(400).json({ message: "Zone name cannot be empty." });
+  }
+
+  // Build the complete updated record first. Nothing in memory changes until
+  // the database write (when configured) has succeeded.
+  let updatedZone;
   try {
-    const { name, color, polygon: requestedPolygon, notes } = req.body;
+    let polygon = zone.polygon;
+    let areaHectares = zone.areaHectares;
+    let areaAcres = zone.areaAcres;
     if (requestedPolygon) {
-      const polygon = validatePolygonGeometry(requestedPolygon);
+      polygon = validatePolygonGeometry(requestedPolygon);
       const field = memoryDb.fields.find(
         (entry) => entry.id === zone.fieldId && entry.userId === req.user?.id,
       );
@@ -239,30 +263,35 @@ export const updateZone = async (req: AuthenticatedRequest, res: Response) => {
           .status(400)
           .json({ message: "Zone overlaps an existing zone in this field." });
       }
-      zone.polygon = polygon;
       const area = calculatePolygonArea(polygon);
-      zone.areaHectares = Number(area.hectares.toFixed(2));
-      zone.areaAcres = Number(area.acres.toFixed(2));
+      areaHectares = Number(area.hectares.toFixed(2));
+      areaAcres = Number(area.acres.toFixed(2));
     }
-
-    const updatedZone = {
+    updatedZone = {
       ...zone,
-      ...(name !== undefined ? { name } : {}),
+      polygon,
+      areaHectares,
+      areaAcres,
+      ...(name !== undefined ? { name: name.trim() } : {}),
       ...(color !== undefined ? { color } : {}),
       ...(notes !== undefined ? { notes } : {}),
       updatedAt: new Date().toISOString(),
     };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Invalid zone geometry.";
+    return res.status(400).json({ message });
+  }
+
+  try {
     if (mongoIsReady()) await saveDomainRecord("zones", updatedZone);
     Object.assign(zone, updatedZone);
     return res.json({ zone });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Invalid zone geometry.";
-    if (mongoIsReady() && !/polygon|zone overlaps|field/i.test(message)) {
-      console.error("Unable to persist management zone update.", error);
-      return res.status(500).json({ message: "Unable to update the zone right now." });
-    }
-    return res.status(400).json({ message });
+    console.error("Unable to persist management zone update.", error);
+    return res
+      .status(500)
+      .json({ message: "Unable to update the zone right now." });
   }
 };
 

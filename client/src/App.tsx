@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useNavigate } from "react-router-dom";
 import {
-  Activity,
   ArrowRight,
   CheckCircle2,
   Droplets,
@@ -12,8 +11,9 @@ import {
 } from "lucide-react";
 import { Layout } from "./components/Layout";
 import { CottonIssueGuide } from "./components/CottonIssueGuide";
-import { MapEditor } from "./components/MapEditor";
 import { MappingWorkspace } from "./components/MappingWorkspace";
+import { ZoneSoilSummary } from "./components/ZoneSoilSummary";
+import { pickSoilForZone } from "./lib/soilSelection";
 import {
   buildCottonCalendar,
   cottonCalendarTemplates,
@@ -23,12 +23,6 @@ import {
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { api, apiErrorMessage } from "./lib/api";
 import { parseFarmList } from "./lib/farms";
-import {
-  polygonArea,
-  splitFieldIntoGridZones,
-  toGeoPolygon,
-  validateZonePartition,
-} from "./lib/geometry";
 import type {
   DashboardSummary,
   Farm,
@@ -39,16 +33,6 @@ import type {
 } from "./types";
 
 const cardClass = "card p-5";
-const zoneColors = [
-  "#4AA85A",
-  "#D97706",
-  "#2563EB",
-  "#9333EA",
-  "#DB2777",
-  "#0D9488",
-  "#DC2626",
-  "#4F46E5",
-];
 
 const ProtectedRoute = () => {
   const { user, loading } = useAuth();
@@ -723,1015 +707,6 @@ const FarmsPage = () => {
   );
 };
 
-const FieldMappingPage = () => {
-  const [farms, setFarms] = useState<Farm[]>([]);
-  const [loadingFarms, setLoadingFarms] = useState(true);
-  const [farmsError, setFarmsError] = useState("");
-  const [fields, setFields] = useState<Field[]>([]);
-  const [editingFieldId, setEditingFieldId] = useState("");
-  const [form, setForm] = useState({
-    farmId: "",
-    name: "",
-    cropName: "Cotton",
-    season: "Kharif",
-    sowingDate: "",
-    notes: "",
-    irrigationMethod: "Drip",
-  });
-  const [boundary, setBoundary] = useState<[number, number][]>([]);
-  const [drawingActive, setDrawingActive] = useState(false);
-  const [boundaryReady, setBoundaryReady] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-
-  const loadFarms = async () => {
-    setLoadingFarms(true);
-    setFarmsError("");
-    try {
-      const response = await api.get("/farms");
-      setFarms(parseFarmList(response.data));
-    } catch (error) {
-      setFarmsError(apiErrorMessage(error, "Unable to load farms."));
-    } finally {
-      setLoadingFarms(false);
-    }
-  };
-
-  const loadFields = async () => {
-    try {
-      const response = await api.get("/fields");
-      setFields(response.data.fields ?? []);
-    } catch (error) {
-      setError(apiErrorMessage(error, "Unable to load fields."));
-    }
-  };
-
-  useEffect(() => {
-    void loadFarms();
-    void loadFields();
-  }, []);
-
-  const finishBoundary = () => {
-    try {
-      toGeoPolygon(boundary);
-      setDrawingActive(false);
-      setBoundaryReady(true);
-      setError("");
-    } catch (finishError) {
-      setBoundaryReady(false);
-      setError(apiErrorMessage(finishError, "The boundary is invalid."));
-    }
-  };
-
-  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    try {
-      setError("");
-      setSuccess("");
-      if (!boundaryReady || drawingActive) {
-        throw new Error(
-          "Finish and validate the field boundary before saving.",
-        );
-      }
-      const payload = {
-        farmId: form.farmId,
-        name: form.name.trim(),
-        cropName: form.cropName.trim(),
-        season: form.season.trim(),
-        ...(form.sowingDate ? { sowingDate: form.sowingDate } : {}),
-        notes: form.notes,
-        irrigationMethod: form.irrigationMethod,
-        boundary: toGeoPolygon(boundary),
-      };
-
-      if (editingFieldId) {
-        await api.patch(`/fields/${editingFieldId}`, payload);
-      } else {
-        await api.post("/fields", payload);
-      }
-      setBoundary([]);
-      setDrawingActive(false);
-      setBoundaryReady(false);
-      setForm({
-        farmId: "",
-        name: "",
-        cropName: "Cotton",
-        season: "Kharif",
-        sowingDate: "",
-        notes: "",
-        irrigationMethod: "Drip",
-      });
-      setEditingFieldId("");
-      setSuccess("Field boundary saved.");
-      await Promise.all([loadFarms(), loadFields()]);
-    } catch (submitError) {
-      setError(apiErrorMessage(submitError, "Unable to save the field."));
-    }
-  };
-
-  const editField = (field: Field) => {
-    setEditingFieldId(field.id);
-    setForm({
-      farmId: field.farmId,
-      name: field.name,
-      cropName: field.cropName,
-      season: field.season,
-      sowingDate: field.sowingDate ?? "",
-      notes: field.notes ?? "",
-      irrigationMethod: field.irrigationMethod ?? "",
-    });
-    const coordinates = field.boundary.coordinates[0] ?? [];
-    const ring =
-      coordinates.length > 1 &&
-      coordinates[0][0] === coordinates[coordinates.length - 1][0] &&
-      coordinates[0][1] === coordinates[coordinates.length - 1][1]
-        ? coordinates.slice(0, -1)
-        : coordinates;
-    setBoundary(ring.map(([lng, lat]) => [lat, lng]));
-    setDrawingActive(false);
-    setBoundaryReady(true);
-    setError("");
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <form id="field-mapping-form" onSubmit={submit} className="card p-5">
-          <h2 className="text-2xl font-bold text-slate-900">
-            Map field boundary
-          </h2>
-          <div className="mt-4 grid gap-4">
-            <label className="block text-sm font-medium text-slate-700">
-              <span className="mb-1 block">Associated farm</span>
-              <select
-                required
-                disabled={
-                  loadingFarms || farmsError !== "" || farms.length === 0
-                }
-                className="input disabled:cursor-not-allowed disabled:bg-slate-100"
-                value={form.farmId}
-                onChange={(event) =>
-                  setForm({ ...form, farmId: event.target.value })
-                }
-              >
-                <option value="">
-                  {loadingFarms
-                    ? "Loading farms…"
-                    : farmsError
-                      ? "Farm list unavailable"
-                      : farms.length === 0
-                        ? "No farms found"
-                        : "Select farm"}
-                </option>
-                {farms.map((farm) => (
-                  <option key={farm.id} value={farm.id}>
-                    {farm.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {farmsError ? (
-              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-                <p role="alert">{farmsError}</p>
-                <button
-                  className="btn btn-secondary mt-2"
-                  type="button"
-                  onClick={() => void loadFarms()}
-                >
-                  Retry loading farms
-                </button>
-              </div>
-            ) : !loadingFarms && farms.length === 0 ? (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                <p>
-                  No farms found for your account.{" "}
-                  <a className="font-semibold underline" href="/farms">
-                    Create a farm in My Farms
-                  </a>
-                  , then retry.
-                </p>
-                <button
-                  className="btn btn-secondary mt-2"
-                  type="button"
-                  onClick={() => void loadFarms()}
-                >
-                  Refresh farms
-                </button>
-              </div>
-            ) : null}
-            <InputField
-              label="Field name"
-              value={form.name}
-              onChange={(value) => setForm({ ...form, name: value })}
-              placeholder="North Cotton Block"
-              required
-            />
-            <InputField
-              label="Crop name"
-              value={form.cropName}
-              onChange={(value) => setForm({ ...form, cropName: value })}
-              placeholder="Cotton"
-              required
-            />
-            <InputField
-              label="Season"
-              value={form.season}
-              onChange={(value) => setForm({ ...form, season: value })}
-              placeholder="Kharif"
-              required
-            />
-            <InputField
-              label="Sowing date"
-              value={form.sowingDate}
-              onChange={(value) => setForm({ ...form, sowingDate: value })}
-              type="date"
-            />
-            <InputField
-              label="Irrigation method"
-              value={form.irrigationMethod}
-              onChange={(value) =>
-                setForm({ ...form, irrigationMethod: value })
-              }
-              placeholder="Drip"
-            />
-            <label className="block text-sm font-medium text-slate-700">
-              <span className="mb-1 block">Notes</span>
-              <textarea
-                className="input min-h-[90px]"
-                value={form.notes}
-                onChange={(event) =>
-                  setForm({ ...form, notes: event.target.value })
-                }
-                placeholder="Field notes"
-              />
-            </label>
-            {error && (
-              <p role="alert" className="text-sm text-rose-700">
-                {error}
-              </p>
-            )}
-            {success && (
-              <p role="status" className="text-sm text-field-700">
-                {success}
-              </p>
-            )}
-            {editingFieldId && (
-              <button
-                className="btn btn-secondary"
-                type="button"
-                onClick={() => {
-                  setEditingFieldId("");
-                  setBoundary([]);
-                  setForm({
-                    farmId: "",
-                    name: "",
-                    cropName: "Cotton",
-                    season: "Kharif",
-                    sowingDate: "",
-                    notes: "",
-                    irrigationMethod: "Drip",
-                  });
-                }}
-              >
-                Cancel editing
-              </button>
-            )}
-            <button
-              className="btn btn-primary"
-              type="submit"
-              disabled={!boundaryReady || drawingActive}
-            >
-              {editingFieldId ? "Update field boundary" : "Save field boundary"}
-            </button>
-          </div>
-        </form>
-
-        <div className="card p-5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-slate-900">Map editor</h2>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              className="btn btn-secondary"
-              type="button"
-              onClick={() => {
-                if (!editingFieldId) {
-                  setBoundary([]);
-                  setBoundaryReady(false);
-                }
-                setDrawingActive(true);
-                setError("");
-                setSuccess("");
-              }}
-            >
-              Draw Boundary
-            </button>
-            <button
-              className="btn btn-secondary"
-              type="button"
-              onClick={finishBoundary}
-            >
-              Finish Drawing
-            </button>
-            <button
-              className="btn btn-secondary"
-              type="button"
-              onClick={() => {
-                setBoundary((vertices) => vertices.slice(0, -1));
-                setBoundaryReady(false);
-              }}
-            >
-              Undo Last Vertex
-            </button>
-            <button
-              className="btn btn-secondary"
-              type="button"
-              onClick={() => {
-                setDrawingActive(false);
-                setBoundaryReady(false);
-              }}
-            >
-              Edit Boundary
-            </button>
-            <button
-              className="btn btn-secondary"
-              type="button"
-              onClick={() => {
-                if (editingFieldId) {
-                  const saved = fields.find(
-                    (field) => field.id === editingFieldId,
-                  );
-                  if (saved) editField(saved);
-                } else {
-                  setBoundary([]);
-                  setBoundaryReady(false);
-                  setDrawingActive(false);
-                }
-                setError("");
-              }}
-            >
-              Cancel Drawing
-            </button>
-            <button
-              className="btn btn-secondary"
-              type="button"
-              onClick={() => {
-                setBoundary([]);
-                setBoundaryReady(false);
-                setDrawingActive(false);
-              }}
-            >
-              Clear Boundary
-            </button>
-          </div>
-          <div className="mt-4">
-            <MapEditor
-              points={boundary}
-              onChange={(vertices) => {
-                setBoundary(vertices);
-                setBoundaryReady(false);
-              }}
-              drawingActive={drawingActive}
-              onCurrentLocation={(location) => {
-                const start: [number, number] = [
-                  location.latitude,
-                  location.longitude,
-                ];
-                setBoundary((vertices) => [...vertices, start]);
-                setBoundaryReady(false);
-                setDrawingActive(true);
-              }}
-            />
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-            <span>
-              {drawingActive
-                ? "Drawing: active"
-                : boundaryReady
-                  ? "Boundary: validated"
-                  : "Drawing: inactive"}
-            </span>
-            {boundaryReady && boundary.length >= 3 ? (
-              <span className="font-semibold text-field-700">
-                Area: {polygonArea(toGeoPolygon(boundary)).hectares.toFixed(2)}{" "}
-                ha · {polygonArea(toGeoPolygon(boundary)).acres.toFixed(2)}{" "}
-                acres
-              </span>
-            ) : null}
-            <button
-              className="btn btn-primary"
-              type="submit"
-              form="field-mapping-form"
-              disabled={!boundaryReady || drawingActive}
-            >
-              Save Boundary
-            </button>
-          </div>
-          <p className="mt-3 text-sm text-slate-600">
-            Click the map to draw the boundary. GeoJSON positions are stored in
-            [longitude, latitude] order and validated before saving.
-          </p>
-        </div>
-      </div>
-
-      <div className="card p-5">
-        <h2 className="text-2xl font-bold text-slate-900">Saved fields</h2>
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          {fields.length > 0 ? (
-            fields.map((field) => (
-              <button
-                key={field.id}
-                type="button"
-                onClick={() => editField(field)}
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left hover:border-field-400"
-              >
-                <p className="text-lg font-semibold text-slate-800">
-                  {field.name}
-                </p>
-                <p className="mt-1 text-sm text-slate-600">
-                  {field.cropName} · {field.season} · {field.areaHectares} ha
-                </p>
-                <p className="mt-2 text-sm text-slate-500">
-                  Boundary area: {field.areaAcres.toFixed(2)} acres · Select to
-                  edit
-                </p>
-              </button>
-            ))
-          ) : (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
-              No mapped fields yet.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const FieldZonesPage = () => {
-  const [fields, setFields] = useState<Field[]>([]);
-  const [zones, setZones] = useState<Zone[]>([]);
-  const [selectedField, setSelectedField] = useState("");
-  const [mode, setMode] = useState<"manual" | "automatic">("manual");
-  const [form, setForm] = useState({
-    name: "",
-    notes: "",
-    color: "#4AA85A",
-    splitCount: "2",
-  });
-  const [boundary, setBoundary] = useState<[number, number][]>([]);
-  const [fieldBoundary, setFieldBoundary] = useState<[number, number][]>([]);
-  const [drawingActive, setDrawingActive] = useState(false);
-  const [boundaryReady, setBoundaryReady] = useState(false);
-  const [editingZoneId, setEditingZoneId] = useState("");
-  const [generated, setGenerated] = useState<
-    { name: string; color: string; polygon: ReturnType<typeof toGeoPolygon> }[]
-  >([]);
-  const [validation, setValidation] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const [fieldRes, zoneRes] = await Promise.all([
-        api.get("/fields"),
-        api.get("/zones"),
-      ]);
-      setFields(fieldRes.data.fields ?? []);
-      setZones(zoneRes.data.zones ?? []);
-    } catch (loadError) {
-      setError(apiErrorMessage(loadError, "Unable to load field zones."));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void load();
-  }, []);
-
-  useEffect(() => {
-    const field = fields.find((entry) => entry.id === selectedField);
-    if (!field) {
-      setFieldBoundary([]);
-      setBoundary([]);
-      return;
-    }
-
-    const coordinates = field.boundary.coordinates[0] ?? [];
-    const openRing =
-      coordinates.length > 1 &&
-      coordinates[0][0] === coordinates[coordinates.length - 1][0] &&
-      coordinates[0][1] === coordinates[coordinates.length - 1][1]
-        ? coordinates.slice(0, -1)
-        : coordinates;
-    setFieldBoundary(openRing.map(([lng, lat]) => [lat, lng]));
-    setBoundary([]);
-    setBoundaryReady(false);
-    setDrawingActive(false);
-    setEditingZoneId("");
-    setGenerated([]);
-    setValidation("");
-  }, [fields, selectedField]);
-
-  const selectedFieldRecord = fields.find(
-    (field) => field.id === selectedField,
-  );
-  const selectedZones = zones.filter((zone) => zone.fieldId === selectedField);
-
-  const finishManualZone = () => {
-    try {
-      if (!selectedFieldRecord)
-        throw new Error("Select a field before drawing a zone.");
-      const polygon = toGeoPolygon(boundary);
-      const existingPolygons = selectedZones
-        .filter((zone) => zone.id !== editingZoneId)
-        .map((zone) => zone.polygon);
-      const partition = validateZonePartition(
-        selectedFieldRecord!.boundary,
-        [...existingPolygons, polygon],
-        false,
-      );
-      const area = partition.areas[partition.areas.length - 1];
-      setBoundaryReady(true);
-      setDrawingActive(false);
-      setValidation(
-        `Valid and contained. Zone area: ${area.hectares.toFixed(2)} ha / ${area.acres.toFixed(2)} acres. Manual zones do not require complete field coverage.`,
-      );
-      setError("");
-    } catch (finishError) {
-      setBoundaryReady(false);
-      setError(apiErrorMessage(finishError, "The zone boundary is invalid."));
-    }
-  };
-
-  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!selectedFieldRecord) {
-      setError("Select a field before saving a zone.");
-      return;
-    }
-    try {
-      setError("");
-      setSuccess("");
-      if (!boundaryReady || drawingActive) {
-        throw new Error("Finish and validate the zone polygon before saving.");
-      }
-      const payload = {
-        fieldId: selectedField,
-        name: form.name.trim(),
-        notes: form.notes,
-        color: form.color,
-        polygon: toGeoPolygon(boundary),
-      };
-      if (editingZoneId) await api.patch(`/zones/${editingZoneId}`, payload);
-      else await api.post("/zones", payload);
-      setForm({ ...form, name: "", notes: "" });
-      setBoundary([]);
-      setBoundaryReady(false);
-      setDrawingActive(false);
-      setEditingZoneId("");
-      setSuccess("Management zone saved.");
-      await load();
-    } catch (submitError) {
-      setError(apiErrorMessage(submitError, "Unable to save the zone."));
-    }
-  };
-
-  const autoSplit = () => {
-    const field = selectedFieldRecord;
-    const count = Number(form.splitCount);
-    if (!field || !Number.isInteger(count) || count < 2 || count > 20) {
-      setError("Select a field and choose between 2 and 20 automatic zones.");
-      return;
-    }
-    if (selectedZones.length > 0) {
-      setError(
-        "Automatic whole-field splitting requires a field with no existing zones. Existing zones were preserved.",
-      );
-      return;
-    }
-    try {
-      setError("");
-      setSuccess("");
-      const partition = splitFieldIntoGridZones(field, count);
-      const candidates = partition.polygons.map((polygon, index) => ({
-        name: `${field.name} - Zone ${index + 1}`,
-        color: zoneColors[index % zoneColors.length],
-        polygon,
-      }));
-      setGenerated(candidates);
-      setValidation(
-        `${candidates.length} connected grid zones previewed and validated. Area ${partition.totalAreaHectares.toFixed(2)} ha; coverage difference ${partition.coverageDifferenceHectares.toFixed(4)} ha. Tolerance is 0.5% of field area (minimum 0.0001 ha).`,
-      );
-    } catch (splitError) {
-      setError(
-        apiErrorMessage(splitError, "Unable to split the field into zones."),
-      );
-      setGenerated([]);
-    }
-  };
-
-  const saveGenerated = async () => {
-    if (!selectedFieldRecord || generated.length < 2) {
-      setError("Generate and validate a preview before saving.");
-      return;
-    }
-    try {
-      const partition = validateZonePartition(
-        selectedFieldRecord.boundary,
-        generated.map((entry) => entry.polygon),
-      );
-      await api.post("/zones/batch", {
-        fieldId: selectedField,
-        zones: generated,
-      });
-      setGenerated([]);
-      setSuccess("Generated zones saved.");
-      setValidation(
-        `Saved ${partition.polygons.length} grid zones (${partition.totalAreaHectares.toFixed(2)} ha total).`,
-      );
-      await load();
-    } catch (saveError) {
-      setError(apiErrorMessage(saveError, "Unable to save generated zones."));
-    }
-  };
-
-  const editZone = (zone: Zone) => {
-    const ring = zone.polygon.coordinates[0] ?? [];
-    const openRing =
-      ring.length > 1 &&
-      ring[0][0] === ring[ring.length - 1][0] &&
-      ring[0][1] === ring[ring.length - 1][1]
-        ? ring.slice(0, -1)
-        : ring;
-    setEditingZoneId(zone.id);
-    setMode("manual");
-    setForm({
-      ...form,
-      name: zone.name,
-      color: zone.color,
-      notes: zone.notes ?? "",
-    });
-    setBoundary(openRing.map(([lng, lat]) => [lat, lng]));
-    setBoundaryReady(true);
-    setDrawingActive(false);
-    setValidation(
-      "Editing saved zone. Drag vertices, then finish validation before saving.",
-    );
-    setError("");
-  };
-
-  const deleteZone = async (zone: Zone) => {
-    if (!window.confirm(`Delete ${zone.name}? This cannot be undone.`)) return;
-    try {
-      await api.delete(`/zones/${zone.id}`);
-      setZones((current) => current.filter((entry) => entry.id !== zone.id));
-      if (editingZoneId === zone.id) {
-        setEditingZoneId("");
-        setBoundary([]);
-        setBoundaryReady(false);
-      }
-      setSuccess(`${zone.name} deleted.`);
-    } catch (deleteError) {
-      setError(apiErrorMessage(deleteError, "Unable to delete zone."));
-    }
-  };
-
-  const zoneOverlays = [
-    ...selectedZones.map((zone) => {
-      const ring = zone.polygon.coordinates[0] ?? [];
-      const openRing =
-        ring.length > 1 &&
-        ring[0][0] === ring[ring.length - 1][0] &&
-        ring[0][1] === ring[ring.length - 1][1]
-          ? ring.slice(0, -1)
-          : ring;
-      return {
-        id: zone.id,
-        name: zone.name,
-        color: zone.color,
-        selected: zone.id === editingZoneId,
-        points: openRing.map(([lng, lat]) => [lat, lng] as [number, number]),
-      };
-    }),
-    ...generated.map((zone, index) => ({
-      id: `generated-${index}`,
-      name: zone.name,
-      color: zone.color,
-      selected: false,
-      points: zone.polygon.coordinates[0]
-        .slice(0, -1)
-        .map(([lng, lat]) => [lat, lng] as [number, number]),
-    })),
-  ];
-
-  return (
-    <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-      <form onSubmit={submit} className="card p-5">
-        <h2 className="text-2xl font-bold text-slate-900">
-          Create management zone
-        </h2>
-        <div className="mt-4 grid gap-4">
-          <label className="block text-sm font-medium text-slate-700">
-            <span className="mb-1 block">Select field</span>
-            <select
-              required
-              className="input"
-              value={selectedField}
-              onChange={(event) => setSelectedField(event.target.value)}
-            >
-              <option value="">Choose field</option>
-              {fields.map((field) => (
-                <option key={field.id} value={field.id}>
-                  {field.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="flex gap-2">
-            <button
-              className={
-                mode === "manual" ? "btn btn-primary" : "btn btn-secondary"
-              }
-              type="button"
-              onClick={() => {
-                setMode("manual");
-                setGenerated([]);
-              }}
-            >
-              Manual Mode
-            </button>
-            <button
-              className={
-                mode === "automatic" ? "btn btn-primary" : "btn btn-secondary"
-              }
-              type="button"
-              onClick={() => {
-                setMode("automatic");
-                setDrawingActive(false);
-              }}
-            >
-              Automatic Grid Mode
-            </button>
-          </div>
-          {mode === "manual" && (
-            <InputField
-              label="Zone name"
-              value={form.name}
-              onChange={(value) => setForm({ ...form, name: value })}
-              placeholder="Zone A - West Section"
-              required
-            />
-          )}
-          {mode === "manual" && (
-            <label className="block text-sm font-medium text-slate-700">
-              <span className="mb-1 block">Zone color</span>
-              <input
-                type="color"
-                className="h-12 w-full rounded-xl border border-slate-200 bg-white p-1"
-                value={form.color}
-                onChange={(event) =>
-                  setForm({ ...form, color: event.target.value })
-                }
-              />
-            </label>
-          )}
-          {mode === "manual" && (
-            <label className="block text-sm font-medium text-slate-700">
-              <span className="mb-1 block">Zone notes</span>
-              <textarea
-                className="input min-h-[90px]"
-                value={form.notes}
-                onChange={(event) =>
-                  setForm({ ...form, notes: event.target.value })
-                }
-                placeholder="Water stress patterns, nutrient demand, etc."
-              />
-            </label>
-          )}
-          {mode === "manual" ? (
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => {
-                  if (!editingZoneId) {
-                    setBoundary([]);
-                    setBoundaryReady(false);
-                  }
-                  setDrawingActive(true);
-                  setError("");
-                }}
-              >
-                Create Zone
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={finishManualZone}
-              >
-                Finish Zone
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => {
-                  setBoundary((vertices) => vertices.slice(0, -1));
-                  setBoundaryReady(false);
-                }}
-              >
-                Undo Vertex
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => {
-                  setBoundary([]);
-                  setBoundaryReady(false);
-                  setDrawingActive(false);
-                  setEditingZoneId("");
-                  setValidation("");
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <label className="label" htmlFor="auto-split-count">
-                Number of Zones (2–20)
-              </label>
-              <div className="flex gap-2">
-                <input
-                  id="auto-split-count"
-                  className="input"
-                  type="number"
-                  min="2"
-                  max="20"
-                  step="1"
-                  value={form.splitCount}
-                  onChange={(event) =>
-                    setForm({ ...form, splitCount: event.target.value })
-                  }
-                />
-                <button
-                  className="btn btn-secondary whitespace-nowrap"
-                  type="button"
-                  onClick={autoSplit}
-                >
-                  Generate Zones
-                </button>
-              </div>
-            </div>
-          )}
-          <p className="text-xs text-slate-600">
-            {mode === "automatic"
-              ? "Method: longitude-aligned grid strips clipped to the field. Voronoi splitting is not implemented. Generated zones are only saved after validation and confirmation."
-              : "Click Create Zone, draw inside the selected field, then finish and save. Manual zones may leave part of the field uncovered."}
-          </p>
-          {validation && (
-            <p role="status" className="text-sm text-field-700">
-              {validation}
-            </p>
-          )}
-          {error && (
-            <p role="alert" className="text-sm text-rose-700">
-              {error}
-            </p>
-          )}
-          {success && (
-            <p role="status" className="text-sm text-field-700">
-              {success}
-            </p>
-          )}
-          {mode === "manual" ? (
-            <button
-              className="btn btn-primary"
-              type="submit"
-              disabled={!boundaryReady || drawingActive}
-            >
-              {editingZoneId ? "Save Zone Changes" : "Save Zone"}
-            </button>
-          ) : generated.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              <button
-                className="btn btn-primary"
-                type="button"
-                onClick={() => void saveGenerated()}
-              >
-                Save Generated Zones
-              </button>
-              <button
-                className="btn btn-secondary"
-                type="button"
-                onClick={() => setGenerated([])}
-              >
-                Cancel Preview
-              </button>
-              <button
-                className="btn btn-secondary"
-                type="button"
-                onClick={autoSplit}
-              >
-                Regenerate
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </form>
-
-      <div className="card p-5">
-        <h2 className="text-2xl font-bold text-slate-900">Zone map</h2>
-        <div className="mt-4">
-          <MapEditor
-            points={boundary}
-            onChange={(vertices) => {
-              setBoundary(vertices);
-              setBoundaryReady(false);
-            }}
-            referencePoints={fieldBoundary}
-            color={form.color}
-            drawingActive={drawingActive}
-            overlays={zoneOverlays}
-          />
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <span className="rounded bg-slate-100 px-2 py-1">
-            Dashed outline: selected field
-          </span>
-          {zoneOverlays.map((zone) => (
-            <span
-              key={zone.id}
-              className="rounded px-2 py-1 text-white"
-              style={{ backgroundColor: zone.color }}
-            >
-              {zone.name}
-              {zone.selected ? " · selected" : ""}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div className="card p-5 xl:col-span-2">
-        <h2 className="text-2xl font-bold text-slate-900">Saved zones</h2>
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          {loading ? (
-            <p role="status">Loading fields and zones…</p>
-          ) : selectedZones.length > 0 ? (
-            selectedZones.map((zone) => (
-              <div
-                key={zone.id}
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-lg font-semibold text-slate-800">
-                    {zone.name}
-                  </p>
-                  <span
-                    className="h-4 w-4 rounded-full border border-slate-300"
-                    style={{ backgroundColor: zone.color }}
-                  />
-                </div>
-                <p className="mt-2 text-sm text-slate-600">
-                  {zone.areaHectares.toFixed(2)} ha ·{" "}
-                  {zone.areaAcres.toFixed(2)} acres
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Zone boundaries are geometry only; soil results require a
-                  measured soil sample.
-                </p>
-                <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => editZone(zone)}
-                  >
-                    Edit Zone
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-danger"
-                    onClick={() => void deleteZone(zone)}
-                  >
-                    Delete Zone
-                  </button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
-              No zones created yet.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const SoilHealthPage = () => {
   const [fields, setFields] = useState<Field[]>([]);
   const [samples, setSamples] = useState<SoilSample[]>([]);
@@ -1750,16 +725,40 @@ const SoilHealthPage = () => {
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadErrors, setLoadErrors] = useState<string[]>([]);
 
   const load = async () => {
-    const [fieldRes, soilRes, zoneRes] = await Promise.all([
+    setLoading(true);
+    const [fieldRes, soilRes, zoneRes] = await Promise.allSettled([
       api.get("/fields"),
       api.get("/soil"),
       api.get("/zones"),
     ]);
-    setFields(fieldRes.data.fields ?? []);
-    setSamples(soilRes.data.soilSamples ?? []);
-    setZones(zoneRes.data.zones ?? []);
+    const failures: string[] = [];
+    if (fieldRes.status === "fulfilled" && Array.isArray(fieldRes.value.data?.fields)) {
+      setFields(fieldRes.value.data.fields);
+    } else {
+      failures.push(
+        `Unable to load saved fields${fieldRes.status === "rejected" ? `: ${apiErrorMessage(fieldRes.reason, "request failed")}` : "."}`,
+      );
+    }
+    if (soilRes.status === "fulfilled" && Array.isArray(soilRes.value.data?.soilSamples)) {
+      setSamples(soilRes.value.data.soilSamples);
+    } else {
+      failures.push(
+        `Unable to load soil samples${soilRes.status === "rejected" ? `: ${apiErrorMessage(soilRes.reason, "request failed")}` : "."}`,
+      );
+    }
+    if (zoneRes.status === "fulfilled" && Array.isArray(zoneRes.value.data?.zones)) {
+      setZones(zoneRes.value.data.zones);
+    } else {
+      failures.push(
+        `Unable to load management zones${zoneRes.status === "rejected" ? `: ${apiErrorMessage(zoneRes.reason, "request failed")}` : "."}`,
+      );
+    }
+    setLoadErrors(failures);
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -1821,6 +820,20 @@ const SoilHealthPage = () => {
     <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
       <form onSubmit={submit} className="card p-5">
         <h2 className="text-2xl font-bold text-slate-900">Enter soil data</h2>
+        {loadErrors.length > 0 && (
+          <div role="alert" className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-800">
+            {loadErrors.map((message) => (
+              <p key={message}>{message}</p>
+            ))}
+            <button
+              type="button"
+              className="mt-2 font-semibold underline"
+              onClick={() => void load()}
+            >
+              Retry
+            </button>
+          </div>
+        )}
         <div className="mt-4 grid gap-4">
           <label className="block text-sm font-medium text-slate-700">
             <span className="mb-1 block">Field</span>
@@ -1828,17 +841,29 @@ const SoilHealthPage = () => {
               required
               className="input"
               value={form.fieldId}
+              disabled={loading || fields.length === 0}
               onChange={(event) =>
                 setForm({ ...form, fieldId: event.target.value, zoneId: "" })
               }
             >
-              <option value="">Select field</option>
+              <option value="">
+                {loading
+                  ? "Loading saved fields…"
+                  : fields.length
+                    ? "Select field"
+                    : "No saved fields available"}
+              </option>
               {fields.map((field) => (
                 <option key={field.id} value={field.id}>
                   {field.name}
                 </option>
               ))}
             </select>
+            {!loading && fields.length === 0 && loadErrors.length === 0 && (
+              <span className="mt-1 block text-xs text-amber-800">
+                Save a field boundary first in Field Mapping &amp; Zones.
+              </span>
+            )}
           </label>
           <label className="block text-sm font-medium text-slate-700">
             <span className="mb-1 block">Zone (optional)</span>
@@ -1995,8 +1020,12 @@ const FertilizerPlannerPage = () => {
   const [fields, setFields] = useState<Field[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
   const [plans, setPlans] = useState<FertilizerPlan[]>([]);
+  const [soilSamples, setSoilSamples] = useState<SoilSample[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadErrors, setLoadErrors] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     fieldId: "",
     zoneId: "",
@@ -2009,33 +1038,55 @@ const FertilizerPlannerPage = () => {
   });
 
   const load = async () => {
-    try {
-      const [fieldRes, zoneRes, planRes] = await Promise.all([
-        api.get("/fields"),
-        api.get("/zones"),
-        api.get("/fertilizer"),
-      ]);
-      setFields(Array.isArray(fieldRes.data?.fields) ? fieldRes.data.fields : []);
-      setZones(Array.isArray(zoneRes.data?.zones) ? zoneRes.data.zones : []);
-      setPlans(Array.isArray(planRes.data?.plans) ? planRes.data.plans : []);
-      setError("");
-    } catch (loadError) {
-      setError(apiErrorMessage(loadError, "Unable to load fertilizer planner data."));
-    }
+    setLoading(true);
+    // Each resource is loaded independently so one failing request does not
+    // blank the others (and each failure is reported, never swallowed).
+    const [fieldRes, zoneRes, planRes, soilRes] = await Promise.allSettled([
+      api.get("/fields"),
+      api.get("/zones"),
+      api.get("/fertilizer"),
+      api.get("/soil"),
+    ]);
+    const failures: string[] = [];
+    const take = <T,>(
+      result: PromiseSettledResult<{ data: Record<string, unknown> }>,
+      key: string,
+      label: string,
+      apply: (rows: T[]) => void,
+    ) => {
+      if (result.status === "rejected") {
+        failures.push(
+          `Unable to load ${label}: ${apiErrorMessage(result.reason, "request failed")}`,
+        );
+        return;
+      }
+      const rows = result.value.data?.[key];
+      if (Array.isArray(rows)) apply(rows as T[]);
+      else failures.push(`The ${label} response was not in the expected format.`);
+    };
+    take<Field>(fieldRes, "fields", "saved fields", setFields);
+    take<Zone>(zoneRes, "zones", "management zones", setZones);
+    take<FertilizerPlan>(planRes, "plans", "fertilizer plans", setPlans);
+    take<SoilSample>(soilRes, "soilSamples", "soil samples", setSoilSamples);
+    setLoadErrors(failures);
+    setLoading(false);
   };
 
   useEffect(() => {
     void load();
   }, []);
 
+  const fieldZones = zones.filter((zone) => zone.fieldId === form.fieldId);
+  const selectedZone = fieldZones.find((zone) => zone.id === form.zoneId);
+  const zoneSoil = pickSoilForZone(soilSamples, form.fieldId, form.zoneId);
+  const zonePlans = plans.filter((plan) => plan.zoneId === form.zoneId);
+
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
     setSuccess("");
+    setSaving(true);
     try {
-      const selectedZone = zones.find(
-        (zone) => zone.id === form.zoneId && zone.fieldId === form.fieldId,
-      );
       if (!selectedZone) {
         throw new Error("Select a management zone for the chosen field.");
       }
@@ -2061,10 +1112,9 @@ const FertilizerPlannerPage = () => {
         notes: form.notes,
       });
       setSuccess("Zone nutrient quantities saved.");
+      // Keep the field and zone selected so the next zone is one click away.
       setForm({
-        fieldId: "",
-        zoneId: "",
-        planName: "Zone nutrient plan",
+        ...form,
         nitrogen: "",
         phosphorus: "",
         potassium: "",
@@ -2074,11 +1124,10 @@ const FertilizerPlannerPage = () => {
       await load();
     } catch (submitError) {
       setError(apiErrorMessage(submitError, "Unable to save the zone plan."));
+    } finally {
+      setSaving(false);
     }
   };
-  const selectedZone = zones.find(
-    (zone) => zone.id === form.zoneId && zone.fieldId === form.fieldId,
-  );
   const rates = [form.nitrogen, form.phosphorus, form.potassium].map(Number);
   const selectedArea = selectedZone?.areaHectares ?? 0;
 
@@ -2088,45 +1137,86 @@ const FertilizerPlannerPage = () => {
         <h2 className="text-2xl font-bold text-slate-900">
           Fertilizer planner
         </h2>
+        {loadErrors.length > 0 && (
+          <div role="alert" className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-rose-800">
+            {loadErrors.map((message) => (
+              <p key={message}>{message}</p>
+            ))}
+            <button
+              type="button"
+              className="mt-2 font-semibold underline"
+              onClick={() => void load()}
+            >
+              Retry
+            </button>
+          </div>
+        )}
         <div className="mt-4 grid gap-4">
           <label className="block text-sm font-medium text-slate-700">
             <span className="mb-1 block">Field</span>
             <select
               className="input"
               value={form.fieldId}
+              required
+              disabled={loading || fields.length === 0}
               onChange={(event) =>
                 setForm({ ...form, fieldId: event.target.value, zoneId: "" })
               }
             >
-              <option value="">Select field</option>
+              <option value="">
+                {loading
+                  ? "Loading saved fields…"
+                  : fields.length
+                    ? "Select field"
+                    : "No saved fields available"}
+              </option>
               {fields.map((field) => (
                 <option key={field.id} value={field.id}>
                   {field.name}
                 </option>
               ))}
             </select>
+            {!loading && fields.length === 0 && loadErrors.length === 0 && (
+              <span className="mt-1 block text-xs text-amber-800">
+                Save a field boundary first in Field Mapping &amp; Zones.
+              </span>
+            )}
           </label>
           <label className="block text-sm font-medium text-slate-700">
             <span className="mb-1 block">Management zone and measured area</span>
             <select
               className="input"
               value={form.zoneId}
-              onChange={(event) =>
-                setForm({ ...form, zoneId: event.target.value })
-              }
+              onChange={(event) => {
+                setForm({ ...form, zoneId: event.target.value });
+                // Pick up soil data recorded since this page was opened.
+                void load();
+              }}
               required
-              disabled={!form.fieldId}
+              disabled={!form.fieldId || fieldZones.length === 0}
             >
-              <option value="">Select a zone</option>
-              {zones
-                .filter((zone) => zone.fieldId === form.fieldId)
-                .map((zone) => (
-                  <option key={zone.id} value={zone.id}>
-                    {zone.name} · {zone.areaHectares.toFixed(2)} ha
-                  </option>
-                ))}
+              <option value="">
+                {!form.fieldId
+                  ? "Select a field first"
+                  : fieldZones.length
+                    ? "Select a zone"
+                    : "No zones saved for this field"}
+              </option>
+              {fieldZones.map((zone) => (
+                <option key={zone.id} value={zone.id}>
+                  {zone.name} · {zone.areaHectares.toFixed(2)} ha
+                </option>
+              ))}
             </select>
+            {form.fieldId && fieldZones.length === 0 && !loading && (
+              <span className="mt-1 block text-xs text-amber-800">
+                Create zones for this field in Field Mapping &amp; Zones.
+              </span>
+            )}
           </label>
+          {selectedZone && (
+            <ZoneSoilSummary soil={zoneSoil} zoneName={selectedZone.name} />
+          )}
           <InputField
             label="Plan name"
             value={form.planName}
@@ -2195,17 +1285,21 @@ const FertilizerPlannerPage = () => {
               placeholder="Application notes and recommendations"
             />
           </label>
-          <button className="btn btn-primary" type="submit">
-            Save plan
+          <button className="btn btn-primary" type="submit" disabled={saving}>
+            {saving ? "Saving…" : "Save plan"}
           </button>
         </div>
       </form>
 
       <div className="card p-5">
-        <h2 className="text-2xl font-bold text-slate-900">Saved plans</h2>
+        <h2 className="text-2xl font-bold text-slate-900">
+          {selectedZone ? `Saved plans for ${selectedZone.name}` : "Saved plans"}
+        </h2>
         <div className="mt-4 space-y-3">
-          {plans.length > 0 ? (
-            plans.map((plan) => (
+          {loading ? (
+            <p role="status" className="text-sm text-slate-500">Loading saved plans…</p>
+          ) : (selectedZone ? zonePlans : plans).length > 0 ? (
+            (selectedZone ? zonePlans : plans).map((plan) => (
               <div
                 key={plan.id}
                 className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
@@ -2231,7 +1325,9 @@ const FertilizerPlannerPage = () => {
             ))
           ) : (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
-              No plans saved yet.
+              {selectedZone
+                ? `No plans saved for ${selectedZone.name} yet.`
+                : "No plans saved yet."}
             </div>
           )}
         </div>

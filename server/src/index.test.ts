@@ -663,3 +663,55 @@ describe("zone fertilizer quantities", () => {
     expect(response.status).toBe(404);
   });
 });
+
+describe("zone updates and health (regressions)", () => {
+  it("rejects an update that moves a zone outside the field and leaves the zone unchanged", async () => {
+    const { agent, farmId } = await createFarmOwner();
+    const fieldId = await createOwnedField(agent, farmId);
+    const created = await agent
+      .post("/api/zones")
+      .send({ fieldId, name: "West zone", polygon: validZonePolygon });
+    expect(created.status).toBe(201);
+    const zoneId = created.body.zone.id;
+
+    const bad = await agent.patch(`/api/zones/${zoneId}`).send({
+      polygon: {
+        type: "Polygon",
+        coordinates: [
+          [
+            [78.13, 11.13],
+            [78.131, 11.13],
+            [78.131, 11.131],
+            [78.13, 11.131],
+            [78.13, 11.13],
+          ],
+        ],
+      },
+    });
+    expect(bad.status).toBe(400);
+
+    const listed = (await agent.get("/api/zones")).body.zones.find(
+      (zone: { id: string }) => zone.id === zoneId,
+    );
+    expect(listed.polygon).toEqual(created.body.zone.polygon);
+    expect(listed.areaHectares).toBe(created.body.zone.areaHectares);
+  });
+
+  it("rejects an empty zone name on update and accepts a rename", async () => {
+    const { agent, farmId } = await createFarmOwner();
+    const fieldId = await createOwnedField(agent, farmId);
+    const created = await agent
+      .post("/api/zones")
+      .send({ fieldId, name: "West zone", polygon: validZonePolygon });
+    const zoneId = created.body.zone.id;
+    expect((await agent.patch(`/api/zones/${zoneId}`).send({ name: "  " })).status).toBe(400);
+    const renamed = await agent.patch(`/api/zones/${zoneId}`).send({ name: " East " });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.zone.name).toBe("East");
+  });
+
+  it("reports whether storage is durable", async () => {
+    const response = await request(app).get("/api/health");
+    expect(["mongodb", "memory"]).toContain(response.body.persistence);
+  });
+});

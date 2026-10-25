@@ -70,4 +70,10 @@ describe("getCurrentLocation", () => {
       /does not provide geolocation/,
     );
   });
+
+  it("explains insecure origins instead of a generic failure", async () => {
+    const stub = geolocationStub("success");
+    await expect(getCurrentLocation(stub, false)).rejects.toThrow(/HTTPS or at http:\/\/localhost/);
+    expect(stub.getCurrentPosition).not.toHaveBeenCalled();
+  });
 });

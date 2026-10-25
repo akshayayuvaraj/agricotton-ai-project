@@ -35,6 +35,7 @@ vi.mock("react-leaflet", async () => {
         children,
       ),
     Polygon: () => null,
+    Polyline: () => null,
     Popup: ({ children }: { children: React.ReactNode }) =>
       React.createElement("div", null, children),
     TileLayer: () => null,
@@ -164,5 +165,57 @@ describe("MapEditor current location", () => {
         { padding: [24, 24], maxZoom: 16 },
       ),
     );
+  });
+});
+
+describe("MapEditor viewport", () => {
+  const stubObserver = () =>
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+
+  it("does not re-frame the map when vertices change, only when fitKey changes", async () => {
+    stubObserver();
+    map.fitBounds.mockClear();
+    map.setView.mockClear();
+    const square: [number, number][] = [
+      [11.1, 78.1],
+      [11.2, 78.1],
+      [11.2, 78.2],
+    ];
+    const { rerender } = render(
+      <MapEditor points={square} onChange={vi.fn()} fitKey="a" />,
+    );
+    await waitFor(() => expect(map.fitBounds).toHaveBeenCalledTimes(1));
+
+    rerender(
+      <MapEditor points={[...square, [11.1, 78.2]]} onChange={vi.fn()} fitKey="a" />,
+    );
+    expect(map.fitBounds).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <MapEditor points={square} onChange={vi.fn()} fitKey="b" />,
+    );
+    await waitFor(() => expect(map.fitBounds).toHaveBeenCalledTimes(2));
+  });
+
+  it("renders vertices with custom icons, not Leaflet's bundler-fragile default", () => {
+    stubObserver();
+    render(
+      <MapEditor
+        points={[
+          [11.1, 78.1],
+          [11.2, 78.1],
+        ]}
+        onChange={vi.fn()}
+      />,
+    );
+    const markers = screen.getAllByTestId("leaflet-marker");
+    expect(markers).toHaveLength(2);
+    markers.forEach((m) => expect(m).toHaveAttribute("data-icon", "custom"));
   });
 });

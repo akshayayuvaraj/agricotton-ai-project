@@ -190,6 +190,9 @@ export const MappingWorkspace = () => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [notice, setNotice] = useState("");
+  const [selectedZoneId, setSelectedZoneId] = useState("");
+  const [loadVersion, setLoadVersion] = useState(0);
+  const [persistence, setPersistence] = useState<"mongodb" | "memory" | "">("");
 
   const loadRecords = async () => {
     setLoading(true);
@@ -256,19 +259,29 @@ export const MappingWorkspace = () => {
       if (failures.length) setError(failures.join(" "));
     } finally {
       setLoading(false);
+      setLoadVersion((version) => version + 1);
     }
   };
 
   useEffect(() => {
     void loadRecords();
+    // Tell the user honestly whether saves are durable.
+    api
+      .get("/health")
+      .then((response) => {
+        const mode = response?.data?.persistence;
+        if (mode === "mongodb" || mode === "memory") setPersistence(mode);
+      })
+      .catch(() => undefined);
   }, []);
 
   const selectedField = fields.find((field) => field.id === selectedFieldId);
   const selectedFarm = farms.find(
     (farm) => farm.id === (mode === "field" ? fieldForm.farmId : selectedField?.farmId),
   );
-  const selectedZones = zones.filter(
-    (zone) => zone.fieldId === selectedFieldId,
+  const selectedZones = useMemo(
+    () => zones.filter((zone) => zone.fieldId === selectedFieldId),
+    [zones, selectedFieldId],
   );
   const selectedFieldPoints = useMemo(
     () => toMapPoints(selectedField?.boundary),
@@ -293,6 +306,7 @@ export const MappingWorkspace = () => {
           name: zone.name,
           color: zone.color,
           points: toMapPoints(zone.polygon),
+          selected: zone.id === selectedZoneId,
         })),
       ...preview.map((zone, index) => ({
         id: `preview-${index}`,
@@ -301,10 +315,19 @@ export const MappingWorkspace = () => {
         points: toMapPoints(zone.polygon),
       })),
     ];
-  }, [mode, fields, editingFieldId, selectedZones, editingZoneId, preview]);
+  }, [
+    mode,
+    fields,
+    editingFieldId,
+    selectedZones,
+    editingZoneId,
+    selectedZoneId,
+    preview,
+  ]);
 
   const selectField = (fieldId: string) => {
     setSelectedFieldId(fieldId);
+    setSelectedZoneId("");
     setPoints([]);
     setDrawing(false);
     setValidated(false);
@@ -471,6 +494,7 @@ export const MappingWorkspace = () => {
 
   const editZone = (zone: Zone) => {
     setMode("zone");
+    setSelectedZoneId(zone.id);
     setEditingZoneId(zone.id);
     setZoneForm({
       name: zone.name,
@@ -547,12 +571,44 @@ export const MappingWorkspace = () => {
     }
   };
 
+  const handleOverlayClick = (id: string) => {
+    if (mode === "zone") {
+      const zone = selectedZones.find((entry) => entry.id === id);
+      if (!zone) return;
+      setSelectedZoneId(zone.id);
+      setNotice(
+        `Selected ${zone.name}. Choose Edit on its card to rename it or change its shape.`,
+      );
+      return;
+    }
+    const field = fields.find((entry) => entry.id === id);
+    if (field) editField(field);
+  };
+
+  const startDrawingAtCurrentLocation = () => {
+    if (mode === "zone") return;
+    if (!fieldForm.farmId) {
+      setError("Select a saved farm first, then start drawing the boundary.");
+      return;
+    }
+    setPoints([]);
+    setValidated(false);
+    setEditingFieldId("");
+    setDrawing(true);
+    setError("");
+    setSuccess("");
+    setNotice(
+      "Drawing started. Click the map to trace the real field edges around your location; the GPS marker is not part of the boundary.",
+    );
+  };
+
   const deleteZone = async (zone: Zone) => {
     if (!window.confirm(`Delete ${zone.name}? This cannot be undone.`)) return;
     setError("");
     try {
       await api.delete(`/zones/${zone.id}`);
       setZones((current) => current.filter((entry) => entry.id !== zone.id));
+      setSelectedZoneId((current) => (current === zone.id ? "" : current));
       setSuccess(`${zone.name} deleted.`);
     } catch (deleteError) {
       setError(apiErrorMessage(deleteError, "Unable to delete the zone."));
@@ -573,6 +629,16 @@ export const MappingWorkspace = () => {
           does not identify soil variability.
         </p>
       </header>
+      {persistence === "memory" ? (
+        <p
+          role="alert"
+          className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+        >
+          The server is not connected to MongoDB, so saved fields and zones are
+          kept in server memory only and will be lost when the server
+          restarts. Start MongoDB (or set MONGODB_URI) for durable storage.
+        </p>
+      ) : null}
       <div className="flex flex-wrap gap-2" role="group" aria-label="Mapping mode">
         <button
           type="button"
@@ -659,7 +725,13 @@ export const MappingWorkspace = () => {
                   }
                   required
                 >
-                  <option value="">Select a saved farm</option>
+                  <option value="">
+                    {loading
+                      ? "Loading saved farms…"
+                      : farms.length
+                        ? "Select a saved farm"
+                        : "No saved farms available"}
+                  </option>
                   {farms.map((farm) => (
                     <option key={farm.id} value={farm.id}>
                       {farm.name} · {farm.district}
@@ -667,6 +739,26 @@ export const MappingWorkspace = () => {
                   ))}
                 </select>
               </label>
+              {!loading && farms.length === 0 && !authRequired ? (
+                <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+                  {error
+                    ? "Saved farms could not be loaded. See the error below, then use Refresh."
+                    : "Boundaries are saved against a farm. "}
+                  {!error && (
+                    <a className="font-semibold underline" href="/farms">
+                      Add a farm first
+                    </a>
+                  )}
+                </p>
+              ) : null}
+              {authRequired ? (
+                <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+                  Sign in to see farms and fields saved to your account.{" "}
+                  <a className="font-semibold underline" href="/login">
+                    Sign in
+                  </a>
+                </p>
+              ) : null}
               <label className="block text-sm font-medium text-slate-700">
                 <span className="mb-1 block">Saved fields</span>
                 <select
@@ -680,6 +772,13 @@ export const MappingWorkspace = () => {
                       selectField("");
                       setPoints([]);
                       setEditingFieldId("");
+                      setFieldForm((form) => ({
+                        ...form,
+                        name: "",
+                        sowingDate: "",
+                        irrigationMethod: "",
+                        notes: "",
+                      }));
                     }
                   }}
                 >
@@ -875,6 +974,15 @@ export const MappingWorkspace = () => {
               setDrawing(false);
             }}
           />
+          {!(mode === "field"
+            ? Boolean(fieldForm.farmId)
+            : Boolean(selectedField && selectedFieldPoints.length >= 3)) && (
+            <p className="text-xs text-slate-500">
+              {mode === "field"
+                ? "Select a saved farm to enable drawing."
+                : "Select a saved field with a valid boundary to enable drawing."}
+            </p>
+          )}
           {mode === "zone" && (
             <div className="flex flex-wrap gap-2">
               <button className="btn btn-secondary" type="button" onClick={generateGrid}>
@@ -923,6 +1031,13 @@ export const MappingWorkspace = () => {
               color={mode === "field" ? "#358645" : zoneForm.color}
               drawingActive={drawing}
               overlays={overlays}
+              onOverlayClick={handleOverlayClick}
+              onCurrentLocation={
+                mode === "field" ? startDrawingAtCurrentLocation : undefined
+              }
+              fitKey={`${mode}|${selectedFieldId}|${editingFieldId}|${editingZoneId}|${
+                mode === "field" ? fieldForm.farmId : ""
+              }|${loadVersion}`}
               initialCenter={
                 selectedFarm?.coordinates
                   ? [selectedFarm.coordinates.lat, selectedFarm.coordinates.lng]
@@ -990,15 +1105,24 @@ export const MappingWorkspace = () => {
           selectedZones.length ? (
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {selectedZones.map((zone) => (
-                <article key={zone.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <article
+                  key={zone.id}
+                  aria-current={zone.id === selectedZoneId ? "true" : undefined}
+                  className={`cursor-pointer rounded-xl border bg-slate-50 p-4 ${
+                    zone.id === selectedZoneId
+                      ? "border-field-600 ring-2 ring-field-500"
+                      : "border-slate-200"
+                  }`}
+                  onClick={() => setSelectedZoneId(zone.id)}
+                >
                   <div className="flex items-center gap-2">
                     <span className="h-3 w-3 rounded-full" style={{ backgroundColor: zone.color }} />
                     <strong>{zone.name}</strong>
                   </div>
                   <p className="mt-1 text-sm text-slate-600">{zone.areaHectares.toFixed(2)} ha · {zone.areaAcres.toFixed(2)} acres</p>
                   <div className="mt-3 flex gap-2">
-                    <button className="btn btn-secondary" type="button" onClick={() => editZone(zone)}>Edit</button>
-                    <button className="btn btn-secondary" type="button" onClick={() => void deleteZone(zone)}>Delete</button>
+                    <button className="btn btn-secondary" type="button" onClick={(event) => { event.stopPropagation(); editZone(zone); }}>Edit</button>
+                    <button className="btn btn-secondary" type="button" onClick={(event) => { event.stopPropagation(); void deleteZone(zone); }}>Delete</button>
                   </div>
                 </article>
               ))}

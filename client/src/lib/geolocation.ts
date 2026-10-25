@@ -4,9 +4,24 @@ export type CurrentLocation = {
   accuracy: number;
 };
 
+/** Accuracy (metres) above which the fix is probably Wi-Fi/IP based rather than GPS. */
+export const LOW_ACCURACY_METRES = 500;
+
 export const getCurrentLocation = (
   geolocation: Pick<Geolocation, "getCurrentPosition"> | undefined,
+  secureContext: boolean | undefined = typeof window === "undefined"
+    ? undefined
+    : window.isSecureContext,
 ): Promise<CurrentLocation> => {
+  // Browsers only deliver geolocation on HTTPS or localhost. Say so explicitly
+  // instead of letting the request fail with a generic "denied" error.
+  if (secureContext === false) {
+    return Promise.reject(
+      new Error(
+        "Browser location is blocked on insecure pages. Open this app over HTTPS or at http://localhost, then try again.",
+      ),
+    );
+  }
   if (!geolocation) {
     return Promise.reject(
       new Error(
