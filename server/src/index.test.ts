@@ -437,11 +437,12 @@ describe("cotton issue library", () => {
     expect(response.body.total).toBe(32);
     expect(response.body.issues).toHaveLength(32);
     expect(
-      new Set(response.body.issues.map((issue: { id: string }) => issue.id)).size,
+      new Set(response.body.issues.map((issue: { id: string }) => issue.id))
+        .size,
     ).toBe(32);
-    expect(response.body.issues.map((issue: { id: string }) => issue.id)).toContain(
-      "stem-weevil",
-    );
+    expect(
+      response.body.issues.map((issue: { id: string }) => issue.id),
+    ).toContain("stem-weevil");
     expect(response.body.counts).toEqual({
       all: 32,
       disease: 15,
@@ -453,7 +454,7 @@ describe("cotton issue library", () => {
 
   it("combines category, severity and scientific-name search while retaining global counts", async () => {
     const response = await request(app).get(
-      "/api/cotton-issues?category=pest&severity=unverified&search=Helicoverpa",
+      "/api/cotton-issues?category=pest&severity=not_established&search=Helicoverpa",
     );
 
     expect(response.status).toBe(200);
@@ -492,13 +493,11 @@ describe("cotton issue library", () => {
       "/api/cotton-issues?search=rosetted%20flowers",
     );
     expect(search.status).toBe(200);
-    expect(search.body.issues.map((issue: { id: string }) => issue.id)).toContain(
-      "pink-bollworm",
-    );
+    expect(
+      search.body.issues.map((issue: { id: string }) => issue.id),
+    ).toContain("pink-bollworm");
 
-    const details = await request(app).get(
-      "/api/cotton-issues/leaf-reddening",
-    );
+    const details = await request(app).get("/api/cotton-issues/leaf-reddening");
     expect(details.status).toBe(200);
     expect(details.body.issue).toMatchObject({
       id: "leaf-reddening",
@@ -506,6 +505,80 @@ describe("cotton issue library", () => {
     });
     expect(details.body.issue).toHaveProperty("severity.explanation");
     expect(details.body.issue.referenceSources.length).toBeGreaterThan(0);
+    expect(details.body.issue.verification.commonSymptoms.status).toBe(
+      "unverified",
+    );
+    expect(details.body.issue.regionRelevance.status).toBe("not_yet_verified");
+  });
+
+  it("keeps claim verification independent and ties supported claims to valid sources", async () => {
+    const response = await request(app).get("/api/cotton-issues");
+    expect(response.status).toBe(200);
+    const issues = response.body.issues as Array<{
+      id: string;
+      verification: Record<
+        string,
+        { status: string; sourceIds: string[]; note: string }
+      >;
+      referenceSources: Array<{
+        id: string;
+        url: string;
+        publisher: string;
+        accessedAt: string;
+      }>;
+      severity: { explanation: string };
+    }>;
+
+    for (const issue of issues) {
+      const sourceIds = new Set(
+        issue.referenceSources.map((source) => source.id),
+      );
+      for (const source of issue.referenceSources) {
+        expect(() => new URL(source.url)).not.toThrow();
+        expect(new URL(source.url).protocol).toBe("https:");
+        expect(source.publisher).toBeTruthy();
+        expect(source.accessedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      }
+      for (const claim of Object.values(issue.verification)) {
+        expect([
+          "verified",
+          "partially_verified",
+          "unverified",
+          "not_applicable",
+        ]).toContain(claim.status);
+        expect(claim.note).toBeTruthy();
+        expect(claim.sourceIds.every((id) => sourceIds.has(id))).toBe(true);
+      }
+      expect(issue.severity.explanation).toBe(
+        "No formal comparable severity rating (low / moderate / high) was established in the reviewed sources for this issue.",
+      );
+    }
+
+    const bollworm = issues.find((issue) => issue.id === "american-bollworm");
+    expect(bollworm?.verification.scientificName.status).toBe("verified");
+    expect(bollworm?.verification.commonSymptoms.status).toBe("verified");
+    expect(bollworm?.verification.severity.status).toBe("unverified");
+
+    const supportedRecords = issues.filter((issue) =>
+      Object.values(issue.verification).some(
+        (claim) =>
+          claim.status === "verified" || claim.status === "partially_verified",
+      ),
+    );
+   expect(supportedRecords).toHaveLength(26);
+  });
+
+  it("preserves the boll-rot disease complex instead of asserting a single cause", async () => {
+    const response = await request(app).get("/api/cotton-issues/boll-rot");
+    expect(response.status).toBe(200);
+    expect(response.body.issue.scientificName).toBeNull();
+    expect(response.body.issue.causalOrganisms.length).toBeGreaterThan(1);
+    expect(response.body.issue.verification.scientificName.status).toBe(
+      "not_applicable",
+    );
+    expect(response.body.issue.verification.causalOrganisms.status).toBe(
+      "partially_verified",
+    );
   });
 
   it("rejects inconsistent category filters and reports missing records", async () => {
@@ -704,8 +777,12 @@ describe("zone updates and health (regressions)", () => {
       .post("/api/zones")
       .send({ fieldId, name: "West zone", polygon: validZonePolygon });
     const zoneId = created.body.zone.id;
-    expect((await agent.patch(`/api/zones/${zoneId}`).send({ name: "  " })).status).toBe(400);
-    const renamed = await agent.patch(`/api/zones/${zoneId}`).send({ name: " East " });
+    expect(
+      (await agent.patch(`/api/zones/${zoneId}`).send({ name: "  " })).status,
+    ).toBe(400);
+    const renamed = await agent
+      .patch(`/api/zones/${zoneId}`)
+      .send({ name: " East " });
     expect(renamed.status).toBe(200);
     expect(renamed.body.zone.name).toBe("East");
   });

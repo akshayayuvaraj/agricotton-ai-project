@@ -6,6 +6,7 @@ import { CottonIssueModel } from "../models/CottonIssue.js";
 import type {
   CottonIssue,
   CottonIssueCategory,
+  CottonIssueSeverity,
 } from "../types/cottonIssue.js";
 
 const categories: CottonIssueCategory[] = [
@@ -13,13 +14,36 @@ const categories: CottonIssueCategory[] = [
   "pest",
   "crop_disorder",
 ];
-const severityLevels = ["unverified"];
+const severityLevels: CottonIssueSeverity[] = [
+  "low",
+  "moderate",
+  "high",
+  "not_established",
+];
+
+// Normalize legacy records that still carry the retired `unverified` severity level.
+// Normalize them on read so the API and frontend never crash on legacy data.
+const normalizeSeverity = (issue: CottonIssue): CottonIssue => {
+  if ((issue.severity.level as string) === "unverified") {
+    return {
+      ...issue,
+      severity: {
+        level: "not_established",
+        explanation:
+          issue.severity.explanation ||
+          "No formal comparable severity rating (low / moderate / high) was established in the reviewed sources for this issue.",
+      },
+    };
+  }
+  return issue;
+};
 
 const readCatalog = async (): Promise<CottonIssue[]> => {
   if (mongoose.connection.readyState === 1) {
-    return CottonIssueModel.find({}).sort({ id: 1 }).lean<CottonIssue[]>();
+    return (await CottonIssueModel.find({}).sort({ id: 1 }).lean<CottonIssue[]>())
+      .map(normalizeSeverity);
   }
-  return memoryDb.cottonIssues;
+  return memoryDb.cottonIssues.map(normalizeSeverity);
 };
 
 const includesSearchText = (issue: CottonIssue, search: string) => {
@@ -44,7 +68,7 @@ export const listCottonIssues = async (req: Request, res: Response) => {
   if (category && category !== "all" && !categories.includes(category as CottonIssueCategory)) {
     return res.status(400).json({ message: "Invalid cotton issue category." });
   }
-  if (severity && severity !== "all" && !severityLevels.includes(severity)) {
+  if (severity && severity !== "all" && !severityLevels.includes(severity as CottonIssueSeverity)) {
     return res.status(400).json({ message: "Invalid severity filter." });
   }
 

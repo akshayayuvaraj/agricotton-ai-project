@@ -1,20 +1,183 @@
 import type {
   CottonIssue,
   CottonIssueCategory,
+  CottonIssueVerification,
 } from "../types/cottonIssue.js";
 
-const reviewedDate = "2026-10-24";
-const tnauDiseaseUrl =
-  "https://agritech.tnau.ac.in/crop_protection/crop_prot_crop%20diseases_cash%20crops_cotton.html";
-const tnauPestUrl =
-  "https://agritech.tnau.ac.in/crop_protection/crop_prot_crop_insectpest%20_cotton.html";
-const cicrGuideUrl =
-  "https://www.cicr.org.in/wp-content/uploads/Diseases-and-Disorders-of-Cotton.pdf";
+const reviewedDate = "2026-10-25";
+const accessedAt = "2026-10-25";
+
+const sources = {
+  "tnau-cotton-pests": {
+    id: "tnau-cotton-pests",
+    title: "Cotton insect pests",
+    publisher: "Tamil Nadu Agricultural University, Agritech Portal",
+    url: "https://agritech.tnau.ac.in/crop_protection/crop_prot_crop_insectpest%20_cotton.html",
+    accessedAt,
+    notes:
+      "Cotton pest profiles and integrated practices. Older chemical-control text is not presented as a current pesticide recommendation.",
+  },
+  "tnau-cotton-diseases": {
+    id: "tnau-cotton-diseases",
+    title: "Cotton diseases",
+    publisher: "Tamil Nadu Agricultural University, Agritech Portal",
+    url: "https://agritech.tnau.ac.in/crop_protection/crop_prot_crop%20diseases_cash%20crops_cotton.html",
+    accessedAt,
+    notes:
+      "The landing page was reviewed, but disease-specific profile text was not available from it; it does not verify individual symptoms or pathogens.",
+  },
+  "tnau-cotton-ipm": {
+    id: "tnau-cotton-ipm",
+    title: "IPM - Cotton",
+    publisher: "Tamil Nadu Agricultural University, Agritech Portal",
+    url: "https://agritech.tnau.ac.in/crop_protection/crop_prot_ipm_cotton.html",
+    accessedAt,
+    notes:
+      "General cotton monitoring and integrated-management guidance; not proof of occurrence or a substitute for issue-specific advice.",
+  },
+  "tnau-grey-mildew": {
+    id: "tnau-grey-mildew",
+    title: "Grey or areolate mildew of cotton",
+    publisher: "Tamil Nadu Agricultural University, Agritech Portal",
+    url: "https://agritech.tnau.ac.in/crop_protection/cotton_diseases/cotton_d4.html",
+    accessedAt,
+    notes:
+      "Profile lists Ramularia areola, symptoms, favorable conditions and sanitation.",
+  },
+  "tnau-boll-rot": {
+    id: "tnau-boll-rot",
+    title: "Boll rot of cotton",
+    publisher: "Tamil Nadu Agricultural University, Agritech Portal",
+    url: "https://agritech.tnau.ac.in/crop_protection/cotton_diseases/cotton_d5.html",
+    accessedAt,
+    notes:
+      "Describes boll rot as a fungal complex and lists multiple causal organisms; no single pathogen is implied.",
+  },
+  "tnau-fusarium-wilt": {
+    id: "tnau-fusarium-wilt",
+    title: "Fusarium wilt of cotton",
+    publisher: "Tamil Nadu Agricultural University, Agritech Portal",
+    url: "https://agritech.tnau.ac.in/crop_protection/cotton_diseases/cotton_d1.html",
+    accessedAt,
+    notes:
+      "Profile lists Fusarium oxysporum f. sp. vasinfectum and disease details.",
+  },
+  "tnau-verticillium-wilt": {
+    id: "tnau-verticillium-wilt",
+    title: "Verticillium wilt of cotton",
+    publisher: "Tamil Nadu Agricultural University, Agritech Portal",
+    url: "https://agritech.tnau.ac.in/crop_protection/cotton_diseases/cotton_d2.html",
+    accessedAt,
+    notes: "Profile lists Verticillium dahliae and disease details.",
+  },
+  "tnau-root-rot": {
+    id: "tnau-root-rot",
+    title: "Cotton root-rot profile",
+    publisher: "Tamil Nadu Agricultural University, Agritech Portal",
+    url: "https://agritech.tnau.ac.in/crop_protection/cotton_diseases/cotton_d3.html",
+    accessedAt,
+    notes:
+      "Profile symptoms and conditions were retrieved; its displayed heading and causal-organism name were not available, so neither is inferred here.",
+  },
+  "tnau-myrothecium": {
+    id: "tnau-myrothecium",
+    title: "Myrothecium leaf spot of cotton",
+    publisher: "Tamil Nadu Agricultural University, Agritech Portal",
+    url: "https://agritech.tnau.ac.in/crop_protection/cotton_diseases/cotton_d7.html",
+    accessedAt,
+    notes: "Profile lists Myrothecium roridum and characteristic leaf lesions.",
+  },
+  "tnau-cotton-aphids": {
+    id: "tnau-cotton-aphids",
+    title: "Cotton aphid: Aphis gossypii",
+    publisher: "Tamil Nadu Agricultural University, Agritech Portal",
+    url: "https://agritech.tnau.ac.in/crop_protection/cotton/crop_prot_crop_insectpest%20_cotton_11.html",
+    accessedAt,
+    notes:
+      "Cotton aphid symptoms, identification, threshold and integrated practices.",
+  },
+  "tnau-bacterial-blight": {
+    id: "tnau-bacterial-blight",
+    title: "Bacterial blight of cotton",
+    publisher: "Tamil Nadu Agricultural University, Agritech Portal",
+    url: "https://agritech.tnau.ac.in/crop_protection/cotton_diseases/cotton_d9.html",
+    accessedAt,
+    notes: "Issue-specific symptoms, pathogen name used by TNAU, favorable conditions and cultural management. Legacy pesticide instructions are not reproduced as current advice.",
+  },
+  "tnau-alternaria": {
+    id: "tnau-alternaria",
+    title: "Alternaria leaf blight of cotton",
+    publisher: "Tamil Nadu Agricultural University, Agritech Portal",
+    url: "https://agritech.tnau.ac.in/crop_protection/cotton_diseases/cotton_d6.html",
+    accessedAt,
+    notes: "Issue-specific symptoms, pathogen name, favorable conditions and sanitation guidance. Legacy pesticide instructions are not reproduced as current advice.",
+  },
+  "tnau-cercospora": {
+    id: "tnau-cercospora",
+    title: "Cercospora leaf spot of cotton",
+    publisher: "Tamil Nadu Agricultural University, Agritech Portal",
+    url: "https://agritech.tnau.ac.in/crop_protection/cotton_diseases/cotton_d8.html",
+    accessedAt,
+    notes: "Issue-specific symptoms, pathogen name, favorable conditions and sanitation guidance. Legacy pesticide instructions are not reproduced as current advice.",
+  },
+  "tnau-tobacco-streak": {
+    id: "tnau-tobacco-streak",
+    title: "Tobacco streak virus disease of cotton",
+    publisher: "Tamil Nadu Agricultural University, Agritech Portal",
+    url: "https://agritech.tnau.ac.in/crop_protection/cotton_diseases/cotton_d10.html",
+    accessedAt,
+    notes: "Issue-specific cotton symptoms, thrips transmission and cultural guidance. Legacy pesticide instructions are not reproduced as current advice.",
+  },
+  "tnau-cotton-disease-forecast": {
+    id: "tnau-cotton-disease-forecast",
+    title: "Cotton pest and disease forecast, October 2025",
+    publisher: "Tamil Nadu Agricultural University, Agritech Portal",
+    url: "https://www.agritech.tnau.ac.in/crop_protection/pdf/2025/04.%20CPPS%20-Pest_Forecast_report-_Oct_%2C2025.pdf",
+    accessedAt,
+    notes: "Reports Alternaria leaf blight and Tobacco streak virus disease in cotton-growing villages of Coimbatore and Dharmapuri districts at the time of that forecast; this is time-bounded surveillance, not a current field diagnosis.",
+  },
+  "icar-cicr-cotton-field-guide": {
+    id: "icar-cicr-cotton-field-guide",
+    title: "Diseases and Disorders of Cotton: A field guide for symptom-based identification and management",
+    publisher: "ICAR-Central Institute for Cotton Research / ICAR-AICRP on Cotton",
+    url: "https://cicr.org.in/wp-content/uploads/Diseases-and-Disorders-of-Cotton.pdf",
+    accessedAt,
+    notes: "Authoritative field guide for visual diagnosis; supports symptom comparison but recommends local expert confirmation before management decisions.",
+  },
+  "kau-cotton-leaf-curl": {
+    id: "kau-cotton-leaf-curl",
+    title: "Cotton leaf curl disease",
+    publisher: "Kerala Agricultural University, Agri Infotech Portal",
+    url: "https://www.celkau.in/crops/cashcrops/cotton/leafcurl.php",
+    accessedAt,
+    notes: "Supports characteristic leaf-curl symptoms; not evidence of occurrence in Tamil Nadu.",
+  },
+} as const;
+
+type VerificationField =
+  | "scientificName"
+  | "commonSymptoms"
+  | "identificationTips"
+  | "tamilNaduOccurrence"
+  | "cropStagesAffected"
+  | "favorableConditions"
+  | "prevention"
+  | "integratedManagement"
+  | "monitoringGuidance"
+  | "causalOrganisms";
+
+type VerificationOverrides = Partial<
+  Record<VerificationField, Partial<CottonIssueVerification>>
+>;
+type VerifiedFields = Partial<
+  Record<VerificationField, CottonIssueVerification>
+>;
 
 type IssueDetails = Partial<
   Pick<
     CottonIssue,
     | "scientificName"
+    | "causalOrganisms"
     | "commonSymptoms"
     | "identificationTips"
     | "favorableConditions"
@@ -23,39 +186,454 @@ type IssueDetails = Partial<
     | "integratedManagement"
     | "monitoringGuidance"
     | "regionRelevance"
+    | "diagnosticNotes"
   >
 > & {
   id: string;
   name: string;
   category: CottonIssueCategory;
+  verification?: VerificationOverrides;
 };
 
-const notVerified = (detail: string) =>
-  `${detail} was not verified in the accessible cited material.`;
+const verifiedPestProfiles = new Set([
+  "pink-bollworm",
+  "american-bollworm",
+  "spotted-bollworm",
+  "spiny-bollworm",
+  "whitefly",
+  "jassid-cotton-leafhopper",
+  "thrips",
+  "aphids",
+  "mealybugs",
+  "tobacco-caterpillar",
+  "red-cotton-bug",
+  "dusky-cotton-bug",
+  "cotton-leaf-roller",
+  "stem-weevil",
+]);
+
+const sourceIdsForIssue = (issue: IssueDetails) => {
+  const ids = new Set<string>();
+  if (verifiedPestProfiles.has(issue.id)) ids.add("tnau-cotton-pests");
+  if (issue.id === "aphids") ids.add("tnau-cotton-aphids");
+  if (issue.id === "bacterial-blight-angular-leaf-spot") {
+    ids.add("tnau-bacterial-blight");
+    ids.add("tnau-cotton-disease-forecast");
+  }
+  if (issue.id === "alternaria-leaf-spot") {
+    ids.add("tnau-alternaria");
+    ids.add("tnau-cotton-disease-forecast");
+  }
+  if (issue.id === "cercospora-leaf-spot") ids.add("tnau-cercospora");
+  if (issue.id === "tobacco-streak-virus-disease") {
+    ids.add("tnau-tobacco-streak");
+    ids.add("tnau-cotton-disease-forecast");
+  }
+  if (issue.id === "anthracnose") ids.add("icar-cicr-cotton-field-guide");
+  if (issue.id === "cotton-leaf-curl-virus-disease") ids.add("kau-cotton-leaf-curl");
+  if (issue.id === "grey-mildew") ids.add("tnau-grey-mildew");
+  if (issue.id === "boll-rot") ids.add("tnau-boll-rot");
+  if (issue.id === "fusarium-wilt") ids.add("tnau-fusarium-wilt");
+  if (issue.id === "verticillium-wilt") ids.add("tnau-verticillium-wilt");
+  if (issue.id === "root-rot") ids.add("tnau-root-rot");
+  if (issue.id === "myrothecium-leaf-spot") ids.add("tnau-myrothecium");
+  if (ids.size === 0 && issue.category === "disease") {
+    ids.add("tnau-cotton-diseases");
+  }
+  if (issue.category !== "disease") ids.add("tnau-cotton-ipm");
+  return [...ids];
+};
+
+const verifiedBy = (sourceIds: string[], note: string) => ({
+  status: "verified" as const,
+  sourceIds,
+  note,
+});
 
 const makeIssue = (details: IssueDetails): CottonIssue => {
   const isPest = details.category === "pest";
   const isDisorder = details.category === "crop_disorder";
+  const sourceIds = sourceIdsForIssue(details);
+  const isVerifiedPest = verifiedPestProfiles.has(details.id);
+  const issueSources = sourceIds.map(
+    (sourceId) => sources[sourceId as keyof typeof sources],
+  );
+  const verifiedFields: VerifiedFields = {
+    ...(isVerifiedPest
+      ? {
+          scientificName: verifiedBy(
+            ["tnau-cotton-pests"],
+            "The TNAU cotton pest profile gives this scientific name.",
+          ),
+          commonSymptoms: verifiedBy(
+            ["tnau-cotton-pests"],
+            "Symptoms are recorded in the matching TNAU cotton pest profile.",
+          ),
+          identificationTips: verifiedBy(
+            ["tnau-cotton-pests"],
+            "Identification characteristics are recorded in the matching TNAU profile.",
+          ),
+          tamilNaduOccurrence: verifiedBy(
+            ["tnau-cotton-pests"],
+            "Listed in TNAU cotton-pest guidance; this does not establish district-level presence or current field pressure.",
+          ),
+        }
+      : {}),
+    ...(details.id === "aphids"
+      ? {
+          integratedManagement: verifiedBy(
+            ["tnau-cotton-aphids"],
+            "The cited TNAU aphid profile supports the listed non-chemical and biological practices.",
+          ),
+          monitoringGuidance: verifiedBy(
+            ["tnau-cotton-aphids"],
+            "Monitoring threshold and guidance are recorded by TNAU; check current local advice before acting.",
+          ),
+        }
+      : {}),
+    ...(details.id === "grey-mildew"
+      ? {
+          scientificName: verifiedBy(
+            ["tnau-grey-mildew"],
+            "TNAU identifies Ramularia areola as the causal organism.",
+          ),
+          commonSymptoms: verifiedBy(
+            ["tnau-grey-mildew"],
+            "Characteristic leaf symptoms are described in the TNAU disease profile.",
+          ),
+          favorableConditions: verifiedBy(
+            ["tnau-grey-mildew"],
+            "Weather and crop conditions are listed in the TNAU profile.",
+          ),
+          cropStagesAffected: verifiedBy(
+            ["tnau-grey-mildew"],
+            "TNAU describes occurrence in the winter cotton season.",
+          ),
+          tamilNaduOccurrence: verifiedBy(
+            ["tnau-grey-mildew"],
+            "Included in a TNAU cotton disease profile; this is not district-level surveillance.",
+          ),
+          prevention: verifiedBy(
+            ["tnau-grey-mildew"],
+            "The TNAU profile supports the listed sanitation and crop-management measures.",
+          ),
+          integratedManagement: verifiedBy(
+            ["tnau-grey-mildew"],
+            "The cited profile supports sanitation and cultural measures; chemical directions are intentionally omitted.",
+          ),
+        }
+      : {}),
+    ...(details.id === "boll-rot"
+      ? {
+          commonSymptoms: verifiedBy(
+            ["tnau-boll-rot"],
+            "The TNAU profile describes these boll and lint symptoms.",
+          ),
+          favorableConditions: verifiedBy(
+            ["tnau-boll-rot"],
+            "Contributing conditions are listed in the TNAU profile.",
+          ),
+          tamilNaduOccurrence: verifiedBy(
+            ["tnau-boll-rot"],
+            "Included in a TNAU cotton disease profile; this is not district-level surveillance.",
+          ),
+          integratedManagement: verifiedBy(
+            ["tnau-boll-rot"],
+            "The cited profile supports spacing and fertilizer-management measures; chemical directions are intentionally omitted.",
+          ),
+          causalOrganisms: verifiedBy(
+            ["tnau-boll-rot"],
+            "TNAU describes boll rot as a fungal complex with multiple possible organisms.",
+          ),
+        }
+      : {}),
+    ...(details.id === "fusarium-wilt"
+      ? {
+          scientificName: verifiedBy(
+            ["tnau-fusarium-wilt"],
+            "TNAU identifies Fusarium oxysporum f. sp. vasinfectum.",
+          ),
+          commonSymptoms: verifiedBy(
+            ["tnau-fusarium-wilt"],
+            "Symptoms are documented in the TNAU disease profile.",
+          ),
+          identificationTips: verifiedBy(
+            ["tnau-fusarium-wilt"],
+            "Vascular browning is documented as an identification clue by TNAU.",
+          ),
+          favorableConditions: verifiedBy(
+            ["tnau-fusarium-wilt"],
+            "Contributing conditions are listed in the TNAU profile.",
+          ),
+          tamilNaduOccurrence: verifiedBy(
+            ["tnau-fusarium-wilt"],
+            "Included in a TNAU cotton disease profile; this is not district-level surveillance.",
+          ),
+          prevention: verifiedBy(
+            ["tnau-fusarium-wilt"],
+            "The cited profile supports the listed sanitation and seed-health measures.",
+          ),
+          integratedManagement: verifiedBy(
+            ["tnau-fusarium-wilt"],
+            "The cited profile supports biological and cultural measures; chemical directions are intentionally omitted.",
+          ),
+        }
+      : {}),
+    ...(details.id === "verticillium-wilt"
+      ? {
+          scientificName: verifiedBy(
+            ["tnau-verticillium-wilt"],
+            "TNAU identifies Verticillium dahliae.",
+          ),
+          commonSymptoms: verifiedBy(
+            ["tnau-verticillium-wilt"],
+            "Symptoms are documented in the TNAU disease profile.",
+          ),
+          identificationTips: verifiedBy(
+            ["tnau-verticillium-wilt"],
+            "Tiger-stripe leaf symptoms are documented by TNAU.",
+          ),
+          favorableConditions: verifiedBy(
+            ["tnau-verticillium-wilt"],
+            "Contributing conditions are listed in the TNAU profile.",
+          ),
+          cropStagesAffected: verifiedBy(
+            ["tnau-verticillium-wilt"],
+            "TNAU describes symptoms during square and boll formation.",
+          ),
+          tamilNaduOccurrence: verifiedBy(
+            ["tnau-verticillium-wilt"],
+            "Included in a TNAU cotton disease profile; this is not district-level surveillance.",
+          ),
+          prevention: verifiedBy(
+            ["tnau-verticillium-wilt"],
+            "The cited profile supports the listed sanitation and rotation measures.",
+          ),
+          integratedManagement: verifiedBy(
+            ["tnau-verticillium-wilt"],
+            "The cited profile supports biological and cultural measures; chemical directions are intentionally omitted.",
+          ),
+        }
+      : {}),
+    ...(details.id === "root-rot"
+      ? {
+          commonSymptoms: verifiedBy(
+            ["tnau-root-rot"],
+            "The linked TNAU profile supports these root and seedling symptoms; the retrieved page heading was unavailable.",
+          ),
+          favorableConditions: verifiedBy(
+            ["tnau-root-rot"],
+            "Contributing conditions are listed in the linked TNAU profile.",
+          ),
+          tamilNaduOccurrence: verifiedBy(
+            ["tnau-root-rot"],
+            "Included in a TNAU cotton disease profile; the causal organism remains unresolved.",
+          ),
+          prevention: verifiedBy(
+            ["tnau-root-rot"],
+            "The cited profile supports the listed sanitation and cultural measures.",
+          ),
+          integratedManagement: verifiedBy(
+            ["tnau-root-rot"],
+            "The cited profile supports biological and cultural measures; chemical directions are intentionally omitted.",
+          ),
+        }
+      : {}),
+    ...(details.id === "myrothecium-leaf-spot"
+      ? {
+          scientificName: verifiedBy(
+            ["tnau-myrothecium"],
+            "TNAU identifies Myrothecium roridum.",
+          ),
+          commonSymptoms: verifiedBy(
+            ["tnau-myrothecium"],
+            "Characteristic leaf lesions are described in the TNAU profile.",
+          ),
+          tamilNaduOccurrence: verifiedBy(
+            ["tnau-myrothecium"],
+            "Included in a TNAU cotton disease profile; this is not district-level surveillance.",
+          ),
+          integratedManagement: verifiedBy(
+            ["tnau-myrothecium"],
+            "The cited profile supports residue sanitation; chemical directions are intentionally omitted.",
+          ),
+        }
+      : {}),
+  };
+  if (details.id === "bacterial-blight-angular-leaf-spot") {
+    verifiedFields.scientificName = verifiedBy(["tnau-bacterial-blight"], "The scientific name is reproduced as used in the cited TNAU cotton disease profile; taxonomy can vary across references.");
+    verifiedFields.commonSymptoms = verifiedBy(["tnau-bacterial-blight"], "The symptom progression is described in the issue-specific TNAU profile.");
+    verifiedFields.identificationTips = verifiedBy(["tnau-bacterial-blight"], "Angular water-soaked lesions and vein/branch symptoms are described in the issue-specific TNAU profile.");
+    verifiedFields.favorableConditions = verifiedBy(["tnau-bacterial-blight"], "Conditions are taken from the issue-specific TNAU profile.");
+    verifiedFields.prevention = verifiedBy(["tnau-bacterial-blight"], "Seed health, sanitation and rotation practices are described by TNAU.");
+    verifiedFields.integratedManagement = verifiedBy(["tnau-bacterial-blight"], "Only cultural practices from the source are summarized; older pesticide directions are not repeated.");
+    verifiedFields.tamilNaduOccurrence = verifiedBy(["tnau-cotton-disease-forecast"], "A TNAU October 2025 forecast reported bacterial blight in Coimbatore and Dindigul districts at that time; this is not current field surveillance.");
+  }
+  if (details.id === "alternaria-leaf-spot") {
+    verifiedFields.scientificName = verifiedBy(["tnau-alternaria"], "TNAU identifies Alternaria macrospora in its cotton leaf-blight profile.");
+    verifiedFields.commonSymptoms = verifiedBy(["tnau-alternaria"], "Concentric-ring lesions and coalescing blighted areas are described in the issue-specific TNAU profile.");
+    verifiedFields.identificationTips = verifiedBy(["tnau-alternaria"], "The concentric-ring lesion pattern is described in the issue-specific TNAU profile.");
+    verifiedFields.favorableConditions = verifiedBy(["tnau-alternaria"], "Conditions are taken from the issue-specific TNAU profile.");
+    verifiedFields.prevention = verifiedBy(["tnau-alternaria"], "Residue removal and healthy seed practices are described by TNAU.");
+    verifiedFields.integratedManagement = verifiedBy(["tnau-alternaria"], "Cultural practices are summarized; pesticide selection and rates are intentionally omitted.");
+    verifiedFields.tamilNaduOccurrence = verifiedBy(["tnau-cotton-disease-forecast"], "A TNAU October 2025 forecast reported Alternaria leaf blight in cotton-growing villages of Coimbatore and Dharmapuri districts at that time; this is not current field surveillance.");
+  }
+  if (details.id === "cercospora-leaf-spot") {
+    verifiedFields.scientificName = verifiedBy(["tnau-cercospora"], "TNAU lists Cercospora gossypina for cotton Cercospora leaf spot.");
+    verifiedFields.commonSymptoms = verifiedBy(["tnau-cercospora"], "Round or irregular greyish spots and older lesions with dark borders are described in the issue-specific TNAU profile.");
+    verifiedFields.identificationTips = verifiedBy(["tnau-cercospora"], "The lesion appearance is described in the issue-specific TNAU profile.");
+    verifiedFields.favorableConditions = verifiedBy(["tnau-cercospora"], "Conditions are taken from the issue-specific TNAU profile.");
+    verifiedFields.prevention = verifiedBy(["tnau-cercospora"], "Residue sanitation is described by TNAU.");
+    verifiedFields.integratedManagement = verifiedBy(["tnau-cercospora"], "Cultural practices are summarized; pesticide selection and rates are intentionally omitted.");
+  }
+  if (details.id === "anthracnose") {
+    verifiedFields.scientificName = verifiedBy(["icar-cicr-cotton-field-guide"], "The ICAR-CICR field guide reports Colletotrichum gossypii and related historical taxonomy; identification should be confirmed where needed.");
+    verifiedFields.commonSymptoms = verifiedBy(["icar-cicr-cotton-field-guide"], "The field guide describes reddish-brown sunken lesions on leaves/stems and lint discoloration in affected bolls.");
+    verifiedFields.identificationTips = verifiedBy(["icar-cicr-cotton-field-guide"], "The guide recommends inspecting plant parts and internal boll/lint condition; similar symptoms require confirmation.");
+    verifiedFields.prevention = verifiedBy(["icar-cicr-cotton-field-guide"], "Use the field guide for symptom comparison and seek local extension advice for management.");
+    verifiedFields.integratedManagement = verifiedBy(["icar-cicr-cotton-field-guide"], "The record limits guidance to sanitation and diagnosis; it does not prescribe a pesticide dose.");
+  }
+  if (details.id === "tobacco-streak-virus-disease") {
+    verifiedFields.scientificName = verifiedBy(["tnau-tobacco-streak"], "TNAU identifies the disease as Tobacco streak virus (TSV); the vector is reported separately.");
+    verifiedFields.commonSymptoms = verifiedBy(["tnau-tobacco-streak"], "Yellow chlorotic spots progressing to purple necrotic spots with yellow halos, petiole streaks and reduced bud/flower production are described by TNAU.");
+    verifiedFields.identificationTips = verifiedBy(["tnau-tobacco-streak"], "The cited TNAU profile describes the leaf and petiole symptom progression; field diagnosis still needs confirmation.");
+    verifiedFields.favorableConditions = verifiedBy(["tnau-tobacco-streak"], "Temperature, humidity and leaf wetness are listed in the TNAU profile.");
+    verifiedFields.prevention = verifiedBy(["tnau-tobacco-streak"], "Removal of infected plants and alternate hosts is described by TNAU.");
+    verifiedFields.integratedManagement = verifiedBy(["tnau-tobacco-streak"], "The record summarizes host removal and vector monitoring without repeating legacy pesticide directions.");
+    verifiedFields.tamilNaduOccurrence = verifiedBy(["tnau-cotton-disease-forecast"], "A TNAU October 2025 forecast reported Tobacco streak virus disease in cotton-growing villages of Coimbatore and Dharmapuri districts at that time; this is not current field surveillance.");
+  }
+  if (details.id === "cotton-leaf-curl-virus-disease") {
+    verifiedFields.commonSymptoms = verifiedBy(["kau-cotton-leaf-curl"], "The cited agricultural university profile describes leaf curling, vein thickening, underside enations and stunting.");
+    verifiedFields.identificationTips = verifiedBy(["kau-cotton-leaf-curl"], "The cited profile supports these visual clues, but symptoms alone cannot confirm a virus complex.");
+  }
+  if (details.id === "mealybugs") {
+    verifiedFields.scientificName = {
+      status: "partially_verified",
+      sourceIds: ["tnau-cotton-pests"],
+      note: "TNAU lists multiple genera; species-level identification and current accepted taxonomy need expert review.",
+    };
+  }
+  if (details.id === "boll-rot") {
+    verifiedFields.causalOrganisms = {
+      status: "partially_verified",
+      sourceIds: ["tnau-boll-rot"],
+      note: "The source lists multiple fungal organisms; these source-reported names need current taxonomic review.",
+    };
+  }
+  const verificationFor = (
+    field: VerificationField | "severity",
+    hasValue: boolean,
+  ): CottonIssueVerification => {
+    const override = details.verification?.[field as VerificationField];
+    const verified = verifiedFields[field as VerificationField];
+    if (override) {
+      return {
+        status: override.status ?? "unverified",
+        sourceIds: override.sourceIds ?? sourceIds,
+        note: override.note ?? "Review the linked source and claim scope.",
+      };
+    }
+    if (verified) return verified;
+    if (field === "scientificName" && isDisorder) {
+      return {
+        status: "not_applicable",
+        sourceIds: [],
+        note: "This is a crop disorder entry, not a single-organism diagnosis.",
+      };
+    }
+    if (field === "scientificName" && details.id === "boll-rot") {
+      return {
+        status: "not_applicable",
+        sourceIds: ["tnau-boll-rot"],
+        note: "Boll rot is a disease complex; a single scientific name would be misleading.",
+      };
+    }
+    return {
+      status: "unverified",
+      sourceIds: [],
+      note: "This claim has not yet been established from a reviewed, claim-specific source.",
+    };
+  };
+  const verifiedStageIssues = new Set([
+    "pink-bollworm",
+    "american-bollworm",
+    "spotted-bollworm",
+    "spiny-bollworm",
+    "stem-weevil",
+    "grey-mildew",
+    "verticillium-wilt",
+  ]);
+  const verifiedManagementIssues = new Set([
+    "pink-bollworm",
+    "american-bollworm",
+    "spotted-bollworm",
+    "spiny-bollworm",
+    "whitefly",
+    "mealybugs",
+    "tobacco-caterpillar",
+    "red-cotton-bug",
+    "cotton-leaf-roller",
+    "stem-weevil",
+    "grey-mildew",
+    "boll-rot",
+    "fusarium-wilt",
+    "verticillium-wilt",
+    "root-rot",
+    "myrothecium-leaf-spot",
+  ]);
+  if (verifiedStageIssues.has(details.id)) {
+    verifiedFields.cropStagesAffected = verifiedBy(
+      sourceIds.filter((id) => id !== "tnau-cotton-ipm"),
+      "The linked issue profile records the affected crop stage or fruiting part.",
+    );
+  }
+  if (verifiedManagementIssues.has(details.id)) {
+    if (details.integratedManagement?.length) {
+      verifiedFields.integratedManagement ??= verifiedBy(
+        sourceIds.filter((id) => id !== "tnau-cotton-ipm"),
+        "The linked issue profile supports the listed non-chemical practices; no chemical dose is provided.",
+      );
+    }
+    if (details.prevention?.length) {
+      verifiedFields.prevention ??= verifiedBy(
+        sourceIds.filter((id) => id !== "tnau-cotton-ipm"),
+        "The linked issue profile supports the listed preventive or cultural practices.",
+      );
+    }
+  }
+  if (
+    [
+      "grey-mildew",
+      "boll-rot",
+      "fusarium-wilt",
+      "verticillium-wilt",
+      "root-rot",
+    ].includes(details.id)
+  ) {
+    verifiedFields.favorableConditions ??= verifiedBy(
+      sourceIds,
+      "Contributing conditions are listed in the linked TNAU disease profile.",
+    );
+  }
+  const regionStatus =
+    verifiedFields.tamilNaduOccurrence?.status === "verified"
+      ? "documented_in_tamil_nadu"
+      : "not_yet_verified";
+
   return {
     id: details.id,
     name: details.name,
     scientificName: details.scientificName ?? null,
+    causalOrganisms: details.causalOrganisms ?? [],
     category: details.category,
     severity: {
-      level: "unverified",
-      explanation:
-        "No comparable severity rating was verified in the cited sources. Impact depends on diagnosis, crop stage, cultivar and local incidence; this label does not mean low risk.",
+      level: "not_established",
+      explanation: "No formal comparable severity rating (low / moderate / high) was established in the reviewed sources for this issue.",
     },
-    commonSymptoms: details.commonSymptoms ?? [
-      notVerified("Common symptoms"),
-    ],
-    identificationTips: details.identificationTips ?? [
-      notVerified("Diagnostic identification characteristics"),
-    ],
-    favorableConditions: details.favorableConditions ?? notVerified("Favorable conditions"),
-    cropStagesAffected: details.cropStagesAffected ?? [
-      notVerified("Affected crop stages"),
-    ],
+    commonSymptoms: details.commonSymptoms ?? [],
+    identificationTips: details.identificationTips ?? [],
+    favorableConditions: details.favorableConditions ?? "",
+    cropStagesAffected: details.cropStagesAffected ?? [],
     prevention:
       details.prevention ??
       (isDisorder
@@ -91,42 +669,63 @@ const makeIssue = (details: IssueDetails): CottonIssue => {
             "Submit representative samples or photographs to a local agricultural expert before treatment. A validated monitoring threshold was not verified.",
           ]),
     regionRelevance: details.regionRelevance ?? {
-      region: "India; Tamil Nadu",
-      status: "unverified",
-      note: "The requested cotton relevance is recorded, but occurrence in a specific Indian state or Tamil Nadu zone was not verified in the accessible cited material.",
+      region: "Tamil Nadu, India",
+      status: regionStatus,
+      note:
+        regionStatus === "documented_in_tamil_nadu"
+          ? "Listed in the linked TNAU cotton guidance; this is not evidence of presence in a particular district or current field pressure."
+          : "Occurrence was not established in the reviewed sources. This is not evidence that the issue is absent from Tamil Nadu.",
     },
-    referenceSources:
-      details.category === "pest"
-        ? [
-            {
-              title: "TNAU: Cotton insect pests",
-              url: tnauPestUrl,
-              notes:
-                "Entry-level details are cited only where available from this cotton pest guide; otherwise the specific profile is marked unverified.",
-            },
-          ]
-        : [
-            {
-              title: "TNAU: Cotton diseases",
-              url: tnauDiseaseUrl,
-              notes:
-                "The page was reachable, but its disease-specific profile text was not available for verification during this review.",
-            },
-            {
-              title: "ICAR-CICR: Cotton disease and disorder field guide",
-              url: cicrGuideUrl,
-              notes:
-                "The supplied PDF URL returned 404 during review; no disease-specific facts are attributed to it.",
-            },
-          ],
+    referenceSources: issueSources,
+    verification: {
+      scientificName: verificationFor(
+        "scientificName",
+        Boolean(details.scientificName),
+      ),
+      commonSymptoms: verificationFor(
+        "commonSymptoms",
+        Boolean(details.commonSymptoms?.length),
+      ),
+      identificationTips: verificationFor(
+        "identificationTips",
+        Boolean(details.identificationTips?.length),
+      ),
+      severity: {
+        status: "unverified",
+        sourceIds: [],
+        note: "No formal comparable severity rating was established in the reviewed sources.",
+      },
+      tamilNaduOccurrence: verificationFor(
+        "tamilNaduOccurrence",
+        regionStatus === "documented_in_tamil_nadu",
+      ),
+      cropStagesAffected: verificationFor(
+        "cropStagesAffected",
+        Boolean(details.cropStagesAffected?.length),
+      ),
+      favorableConditions: verificationFor(
+        "favorableConditions",
+        Boolean(details.favorableConditions),
+      ),
+      prevention: verificationFor("prevention", true),
+      integratedManagement: verificationFor("integratedManagement", true),
+      monitoringGuidance: verificationFor("monitoringGuidance", true),
+      causalOrganisms: verificationFor(
+        "causalOrganisms",
+        Boolean(details.causalOrganisms?.length),
+      ),
+    },
+    diagnosticNotes: details.diagnosticNotes ?? [
+      "This educational record is not a confirmed diagnosis; similar symptoms may have other causes.",
+    ],
     lastReviewed: reviewedDate,
   };
 };
 
 const tnauPestRelevance = {
   region: "Tamil Nadu, India",
-  status: "verified" as const,
-  note: "Listed in TNAU's cotton insect-pest guide; district-level presence and current pressure still require local scouting.",
+  status: "documented_in_tamil_nadu" as const,
+  note: "Listed in TNAU cotton-pest guidance; district-level presence and current pressure still require local scouting.",
 };
 
 export const cottonIssues: CottonIssue[] = [
@@ -134,51 +733,229 @@ export const cottonIssues: CottonIssue[] = [
     id: "bacterial-blight-angular-leaf-spot",
     name: "Bacterial blight / angular leaf spot",
     category: "disease",
+    scientificName: "Xanthomonas campestris pv. malvacearum",
+    commonSymptoms: [
+      "Small water-soaked, angular lesions appear on leaves and become reddish-brown; lesions may be limited by veins and veinlets.",
+      "Vein darkening, leaf crinkling, stem or branch lesions, and water-soaked to dark boll lesions may occur as disease progresses.",
+    ],
+    identificationTips: [
+      "Inspect both leaf surfaces for angular water-soaked lesions; check veins, petioles, stems and bolls for progressive dark lesions.",
+      "Leaf spots alone are not definitive; bacterial blight can resemble other leaf-spot diseases.",
+    ],
+    favorableConditions: "TNAU reports warm temperatures, high relative humidity, rain followed by sunshine and spread by seed, rain splash, irrigation water and implements.",
+    prevention: [
+      "Use healthy seed and locally recommended seed-health practices.",
+      "Remove infected crop debris and volunteer cotton; use suitable crop rotation and avoid moving contaminated plant material between fields.",
+    ],
+    integratedManagement: [
+      "Prioritize healthy seed, sanitation, rotation and field hygiene; inspect the crop after wet weather.",
+      "Do not use old pesticide recipes from archived pages as current directions; ask local extension staff to confirm any treatment.",
+    ],
+    diagnosticNotes: ["TNAU's pathogen name is retained as the source-reported name; taxonomy differs among references.", "A TNAU October 2025 forecast reported disease in Coimbatore and Dindigul districts at that time; it does not establish current field presence."],
   }),
   makeIssue({
     id: "alternaria-leaf-spot",
-    name: "Alternaria leaf spot",
+    name: "Alternaria leaf spot / blight",
     category: "disease",
+    scientificName: "Alternaria macrospora",
+    commonSymptoms: [
+      "Small pale, brown or irregular round spots develop on leaves; lesions may show concentric rings.",
+      "Spots can merge into larger blighted areas, and affected leaves may become brittle and fall; bracts and bolls may also be affected.",
+    ],
+    identificationTips: [
+      "Look for brown lesions with concentric rings and check whether multiple spots are merging.",
+      "Do not diagnose from a single image alone; other leaf spots can look similar.",
+    ],
+    favorableConditions: "TNAU reports high humidity, intermittent rain and moderate temperatures around 25–28 °C as favorable conditions.",
+    prevention: [
+      "Remove infected crop residues and avoid retaining visibly diseased plant material in the field.",
+      "Use healthy seed and suitable spacing; inspect the crop after humid or rainy periods.",
+    ],
+    integratedManagement: [
+      "Prioritize crop-residue sanitation and regular scouting; confirm the diagnosis before selecting a treatment.",
+      "Pesticide products and rates are intentionally omitted here because current registration and local advice must be checked.",
+    ],
+    diagnosticNotes: ["A TNAU October 2025 forecast reported Alternaria leaf blight in cotton-growing villages of Coimbatore and Dharmapuri districts at that time; this is time-bounded evidence, not current surveillance."],
   }),
   makeIssue({
     id: "grey-mildew",
     name: "Grey mildew",
     category: "disease",
+    scientificName: "Ramularia areola",
+    commonSymptoms: [
+      "Irregular to angular pale, translucent lesions bounded by leaf veins, with grey powdery growth on the lower leaf surface.",
+      "Light-green specks may appear above; severe infection can cause yellowing and premature leaf fall.",
+    ],
+    identificationTips: [
+      "Check both leaf surfaces: the TNAU profile describes grey growth below and corresponding light-green specks above.",
+    ],
+    favorableConditions:
+      "Wet, humid winter-season conditions, intermittent North-East monsoon rain, cooler temperatures, close planting and excessive nitrogen are listed by TNAU.",
+    cropStagesAffected: [
+      "Winter cotton season; the profile does not specify a single growth stage.",
+    ],
+    prevention: [
+      "Remove infected crop residues and self-sown cotton plants.",
+      "Avoid excessive nitrogen and use spacing appropriate to the soil and variety.",
+    ],
+    integratedManagement: [
+      "Prioritize residue sanitation and appropriate spacing; confirm diagnosis locally before considering treatment.",
+    ],
   }),
   makeIssue({
     id: "myrothecium-leaf-spot",
     name: "Myrothecium leaf spot",
     category: "disease",
+    scientificName: "Myrothecium roridum",
+    commonSymptoms: [
+      "Reddish spots, from pinpoints to about 1 cm, may form near leaf margins.",
+      "Affected tissue may fall away, leaving irregular shot holes.",
+    ],
+    identificationTips: [
+      "Look for reddish marginal spots and irregular holes where damaged tissue has dropped out.",
+    ],
+    integratedManagement: [
+      "Remove and destroy infected plant residues; confirm the diagnosis locally before any treatment.",
+    ],
   }),
   makeIssue({
     id: "fusarium-wilt",
     name: "Fusarium wilt",
     category: "disease",
+    scientificName: "Fusarium oxysporum f. sp. vasinfectum",
+    commonSymptoms: [
+      "Yellowing or browning of cotyledons, followed by yellowing, drooping and wilting of leaves.",
+      "Vascular tissue may brown or blacken; affected plants may be stunted and bear fewer bolls.",
+    ],
+    identificationTips: [
+      "Vascular browning is described in the TNAU profile; visual symptoms alone do not confirm Fusarium wilt.",
+    ],
+    favorableConditions:
+      "TNAU lists soil temperatures of 20-30 C, hot dry periods followed by rain, heavy alkaline soils and root injury as contributing conditions.",
+    prevention: [
+      "Remove infected plant debris and use healthy seed based on current local guidance.",
+      "Use crop rotation and soil-health practices recommended by local extension specialists.",
+    ],
+    integratedManagement: [
+      "Prioritize sanitation and locally validated biological or cultural practices; confirm the cause before treatment.",
+    ],
   }),
   makeIssue({
     id: "verticillium-wilt",
     name: "Verticillium wilt",
     category: "disease",
+    scientificName: "Verticillium dahliae",
+    commonSymptoms: [
+      "Bronzing of veins followed by interveinal chlorosis, yellowing and leaf scorching.",
+      "Leaf margins may dry and interveinal areas may show a tiger-stripe pattern; affected plants can remain barren.",
+    ],
+    identificationTips: [
+      "TNAU describes a tiger-stripe leaf pattern; confirm suspected wilt with an agricultural diagnostic service.",
+    ],
+    favorableConditions:
+      "TNAU lists lower temperatures around 15-20 C, low-lying or poorly drained heavy alkaline soils and excessive nitrogen.",
+    cropStagesAffected: [
+      "Square and boll formation stages are identified in the TNAU profile.",
+    ],
+    prevention: [
+      "Remove infected crop debris and use crop rotation with locally suitable non-host crops.",
+      "Avoid excessive nitrogen and select varieties only where local resistance guidance is available.",
+    ],
+    integratedManagement: [
+      "Prioritize sanitation, rotation and locally validated biological or cultural practices; confirm diagnosis before treatment.",
+    ],
   }),
   makeIssue({
     id: "root-rot",
     name: "Root rot",
     category: "disease",
+    commonSymptoms: [
+      "Seedlings may develop dark lesions on the hypocotyl, girdling and death.",
+      "Affected basal stems may darken and shred; roots may rot and plants may dry and pull out easily.",
+    ],
+    identificationTips: [
+      "Inspect roots and the lower stem. Similar wilting can have other causes; the source profile's title and causal organism were unavailable.",
+    ],
+    favorableConditions:
+      "The linked TNAU profile lists dry weather after heavy rain, hot soil, low soil moisture, preceding susceptible crops and root injury.",
+    prevention: [
+      "Remove infected plant debris and use locally validated crop rotation and soil-health practices.",
+      "Seek local diagnosis because the causal organism was not established from the retrieved profile.",
+    ],
+    integratedManagement: [
+      "Prioritize sanitation and source-supported cultural or biological approaches; do not assume a pathogen or apply treatment without diagnosis.",
+    ],
+    diagnosticNotes: [
+      "The retrieved TNAU profile text did not expose its heading or causal organism; confirmation of the specific root-rot syndrome is needed.",
+    ],
   }),
   makeIssue({
     id: "cotton-leaf-curl-virus-disease",
     name: "Cotton leaf curl virus disease",
     category: "disease",
+    commonSymptoms: [
+      "Leaves may curl upward or downward and show thickened veins and leafy enations on the underside.",
+      "Severe infection may curl most leaves, stunt plants and reduce boll-bearing capacity.",
+    ],
+    identificationTips: [
+      "Check young leaves for vein thickening, curling and enations underneath; confirm suspected viral disease through an agricultural diagnostic service.",
+      "This disease is associated with a complex of begomoviruses, so a single virus species should not be assigned without testing.",
+    ],
+    integratedManagement: [
+      "Remove and report suspicious plants according to local extension guidance; manage whitefly vectors using current integrated pest-management advice.",
+      "Do not infer that the disease is present in Tamil Nadu from general Indian references; regional occurrence needs local evidence.",
+    ],
+    regionRelevance: {
+      region: "India; Tamil Nadu occurrence not established by the reviewed sources",
+      status: "not_yet_verified",
+      note: "The cited profile supports symptoms but does not establish occurrence in Tamil Nadu. ICAR-CICR reporting describes the disease primarily in northern Indian cotton zones; this is not evidence of absence elsewhere.",
+    },
+    diagnosticNotes: ["Cotton leaf curl disease is associated with a virus complex. Species-level attribution requires diagnostic evidence."],
   }),
   makeIssue({
     id: "anthracnose",
     name: "Anthracnose",
     category: "disease",
+    scientificName: "Colletotrichum gossypii",
+    commonSymptoms: [
+      "Seedling cotyledons and primary leaves may develop small reddish or pale spots; lower stems may develop reddish-brown lesions.",
+      "Bolls may show small water-soaked, slightly sunken reddish-brown spots; affected lint can turn yellow-brown and clump, and seeds may be poorly developed.",
+    ],
+    identificationTips: [
+      "Inspect seedlings, lower stems and boll surfaces; where bolls are affected, check lint discoloration as described in the ICAR-CICR field guide.",
+      "Visual symptoms overlap with other boll and stem diseases, so confirm with an extension or diagnostic service.",
+    ],
+    prevention: [
+      "Use healthy seed, remove infected crop residues and rotten bolls, and maintain field hygiene.",
+      "Avoid waterlogging and seek local guidance on crop rotation and any further measures.",
+    ],
+    integratedManagement: [
+      "Prioritize sanitation, healthy seed and diagnosis before treatment.",
+      "No pesticide dose is provided; treatment decisions should follow current local extension advice and registered labels.",
+    ],
+    diagnosticNotes: ["The ICAR-CICR guide reports Colletotrichum gossypii and related historical taxonomy; this catalog uses the source-reported name and does not claim molecular confirmation."],
   }),
   makeIssue({
     id: "cercospora-leaf-spot",
     name: "Cercospora leaf spot",
     category: "disease",
+    scientificName: "Cercospora gossypina",
+    commonSymptoms: [
+      "Round or irregular greyish spots appear on leaves; older spots may develop dark-brown or blackish borders.",
+    ],
+    identificationTips: [
+      "Inspect older leaves for greyish lesions with darker margins; similar leaf spots can have other causes.",
+      "The TNAU profile notes that dense planting, cloudy weather with intermittent rain and high relative humidity favor disease development.",
+    ],
+    favorableConditions: "TNAU lists dense planting, cloudy weather with intermittent rain followed by dry weather, and high relative humidity.",
+    prevention: [
+      "Remove and destroy infected plant residues and maintain suitable crop spacing.",
+      "Scout after humid or rainy weather and confirm the disease before treatment.",
+    ],
+    integratedManagement: [
+      "Use sanitation and appropriate crop spacing as first-line cultural practices.",
+      "No pesticide dose is included; check current TNAU/local extension advice before any treatment.",
+    ],
   }),
   makeIssue({
     id: "target-leaf-spot",
@@ -194,6 +971,30 @@ export const cottonIssues: CottonIssue[] = [
     id: "boll-rot",
     name: "Boll rot",
     category: "disease",
+    commonSymptoms: [
+      "Small brown or black dots may enlarge over the boll; infection may extend inside and rot seeds and lint.",
+      "Affected bolls may fail to open and drop prematurely; fungal fruiting bodies may be visible.",
+    ],
+    identificationTips: [
+      "Inspect external boll lesions and internal lint and seed condition; several organisms can cause boll rot.",
+    ],
+    favorableConditions:
+      "TNAU lists heavy rainfall during square and boll formation, insect punctures, close spacing and excessive nitrogen.",
+    integratedManagement: [
+      "Use suitable spacing and balanced fertilizer management; assess and manage insect injury using current local IPM guidance.",
+    ],
+    causalOrganisms: [
+      "Fusarium moniliforme",
+      "Colletotrichum capsici",
+      "Aspergillus flavus",
+      "Aspergillus niger",
+      "Rhizopus nigricans",
+      "Nematospora nagpuri",
+      "Botryodiplodia sp.",
+    ],
+    diagnosticNotes: [
+      "TNAU describes boll rot as a fungal complex. The source-reported organism names are not a single diagnosis and need current taxonomic review.",
+    ],
   }),
   makeIssue({
     id: "internal-boll-rot",
@@ -204,6 +1005,25 @@ export const cottonIssues: CottonIssue[] = [
     id: "tobacco-streak-virus-disease",
     name: "Tobacco streak virus disease",
     category: "disease",
+    scientificName: "Tobacco streak virus (TSV)",
+    commonSymptoms: [
+      "Chlorotic yellow spots may develop on leaves and later become purple necrotic spots with yellow halos.",
+      "Necrotic streaks may appear on petioles; bud and flower production can decline, and severe infection may dry squares.",
+    ],
+    identificationTips: [
+      "Check for the described yellow-to-purple spot progression and petiole streaks; symptoms alone do not confirm viral infection.",
+      "TNAU identifies thrips as a vector; finding thrips alone does not prove TSV infection.",
+    ],
+    favorableConditions: "TNAU notes minimum temperature, high relative humidity and leaf wetness among favorable conditions.",
+    prevention: [
+      "Remove confirmed infected plants and manage alternate hosts/weeds according to local extension guidance.",
+      "Monitor thrips through integrated pest management and conserve natural enemies where possible.",
+    ],
+    integratedManagement: [
+      "Prioritize diagnosis, infected-plant removal where advised, alternate-host management and vector monitoring.",
+      "Do not use archived insecticide instructions as current advice; consult local extension staff for any vector treatment.",
+    ],
+    diagnosticNotes: ["A TNAU October 2025 forecast reported TSV in cotton-growing villages of Coimbatore and Dharmapuri districts at that time; this is time-bounded evidence, not current surveillance."],
   }),
   makeIssue({
     id: "pink-bollworm",
@@ -220,7 +1040,9 @@ export const cottonIssues: CottonIssue[] = [
       "TNAU describes larvae with variable colour and alternating dark and light body bands.",
       "The adult is a small moth with fringed hindwing margins.",
     ],
-    cropStagesAffected: ["Flowering and boll development; fruiting parts and immature bolls."],
+    cropStagesAffected: [
+      "Flowering and boll development; fruiting parts and immature bolls.",
+    ],
     monitoringGuidance: [
       "TNAU recommends pheromone traps to monitor adult moth activity and regular in-situ crop surveys.",
       "Record infested fruiting parts and compare with current local action guidance.",
@@ -244,7 +1066,9 @@ export const cottonIssues: CottonIssue[] = [
       "TNAU describes larvae with variable green-to-brown colour and body lines.",
       "The adult is a stout moth with a central forewing spot and a dark outer margin on the pale hindwings.",
     ],
-    cropStagesAffected: ["Square formation through boll development; exact local timing varies."],
+    cropStagesAffected: [
+      "Square formation through boll development; exact local timing varies.",
+    ],
     monitoringGuidance: [
       "Inspect squares, flowers and bolls for eggs, larvae, boreholes and frass; TNAU recommends traps and field surveys.",
       "Use current local thresholds rather than relying on this library for a treatment decision.",
@@ -268,7 +1092,13 @@ export const cottonIssues: CottonIssue[] = [
       "TNAU describes the larva as brownish with dorsal white streaks and a pale-yellow underside.",
       "The adult forewing is pea green with a wedge-shaped white band.",
     ],
-    cropStagesAffected: ["Pre-flowering shoots, square formation and young bolls."],
+    cropStagesAffected: [
+      "Pre-flowering shoots, square formation and young bolls.",
+    ],
+    integratedManagement: [
+      "Scout terminals, squares and bolls; hand-identify larvae and remove infested plant parts where practical.",
+      "TNAU lists Bacillus thuringiensis as a biological option; confirm product suitability with current local extension advice.",
+    ],
     regionRelevance: tnauPestRelevance,
   }),
   makeIssue({
@@ -284,7 +1114,13 @@ export const cottonIssues: CottonIssue[] = [
       "TNAU describes larvae with fleshy tubercles on the thoracic and abdominal segments.",
       "The adult forewings are described as uniformly silvery green.",
     ],
-    cropStagesAffected: ["Pre-flowering shoots, square formation and young bolls."],
+    cropStagesAffected: [
+      "Pre-flowering shoots, square formation and young bolls.",
+    ],
+    integratedManagement: [
+      "Scout terminals, squares and bolls; hand-identify larvae and remove infested plant parts where practical.",
+      "TNAU lists Bacillus thuringiensis as a biological option; confirm product suitability with current local extension advice.",
+    ],
     regionRelevance: tnauPestRelevance,
   }),
   makeIssue({
@@ -301,10 +1137,20 @@ export const cottonIssues: CottonIssue[] = [
       "Inspect leaf undersides for oval nymphs and puparia.",
       "Adults are minute, yellow-bodied insects covered by a white waxy bloom.",
     ],
-    cropStagesAffected: ["Leaf, bud and boll stages; TNAU does not specify a single crop-stage window."],
+    cropStagesAffected: [
+      "Leaf, bud and boll stages; TNAU does not specify a single crop-stage window.",
+    ],
     monitoringGuidance: [
       "Inspect leaf undersides and record counts; TNAU describes yellow pan or sticky traps alongside in-situ counts.",
       "Use current local action guidance; thresholds can vary and are not specified here.",
+    ],
+    prevention: [
+      "Maintain field sanitation and remove alternate weed hosts identified by local extension guidance.",
+      "Use timely sowing, locally recommended spacing and balanced nitrogen to avoid excessive vegetative growth.",
+    ],
+    integratedManagement: [
+      "Monitor leaf undersides with field counts and yellow traps; remove infested leaves where appropriate.",
+      "Conserve natural enemies and consult current local guidance before any treatment.",
     ],
     regionRelevance: tnauPestRelevance,
   }),
@@ -321,7 +1167,9 @@ export const cottonIssues: CottonIssue[] = [
       "Inspect leaf undersides between the veins for light-green, translucent, wingless nymphs.",
       "Adults are green and wedge-shaped.",
     ],
-    cropStagesAffected: ["Tender-leaf and vegetative growth; the source does not define a fixed stage."],
+    cropStagesAffected: [
+      "Tender-leaf and vegetative growth; the source does not define a fixed stage.",
+    ],
     regionRelevance: tnauPestRelevance,
   }),
   makeIssue({
@@ -337,7 +1185,9 @@ export const cottonIssues: CottonIssue[] = [
       "Nymphs are minute, slender and yellowish.",
       "Adults are small, slender, yellowish to brown insects with fringed wings.",
     ],
-    cropStagesAffected: ["Terminal buds and leaves; a fixed crop-stage window was not verified."],
+    cropStagesAffected: [
+      "Terminal buds and leaves; a fixed crop-stage window was not verified.",
+    ],
     regionRelevance: tnauPestRelevance,
   }),
   makeIssue({
@@ -353,13 +1203,38 @@ export const cottonIssues: CottonIssue[] = [
       "TNAU describes small, soft-bodied greenish-brown adults and yellowish or greenish-brown nymphs on leaf undersides.",
       "Winged forms may occur in crowded colonies.",
     ],
-    cropStagesAffected: ["Tender shoots and leaves; a fixed crop-stage window was not verified."],
+    cropStagesAffected: [
+      "Tender shoots and leaves; a fixed crop-stage window was not verified.",
+    ],
+    integratedManagement: [
+      "Use cowpea intercrops or bunds where locally suitable to support natural enemies and apply nitrogen judiciously.",
+      "Use the TNAU-reported threshold only after checking current local recommendations; conserve natural enemies.",
+    ],
+    monitoringGuidance: [
+      "TNAU's cotton aphid profile lists an action threshold of 15% infested plants; confirm current local guidance before acting.",
+      "Inspect tender shoots and leaf undersides for colonies and honeydew.",
+    ],
     regionRelevance: tnauPestRelevance,
   }),
   makeIssue({
     id: "mealybugs",
     name: "Mealybugs",
+    scientificName: "Phenacoccus spp.; Ferrisia spp.; Maconellicoccus spp.",
     category: "pest",
+    commonSymptoms: [
+      "Dense clusters with waxy secretion may form beneath leaves.",
+      "Honeydew can support sooty mould; heavily affected plants may appear blackened and have reduced fruiting.",
+    ],
+    identificationTips: [
+      "Inspect leaf undersides and stems for colonies coated with wax; multiple mealybug genera occur, so species identification needs expert review.",
+    ],
+    prevention: [
+      "Remove alternate weed hosts and scout regularly for early colonies and crawler emergence.",
+    ],
+    integratedManagement: [
+      "TNAU recommends early monitoring and describes natural-enemy parasitoids for specific mealybug species; confirm the species before biological-control selection.",
+      "Use botanical options only when appropriate and validated locally; no chemical dose is provided here.",
+    ],
   }),
   makeIssue({
     id: "tobacco-caterpillar",
@@ -374,10 +1249,20 @@ export const cottonIssues: CottonIssue[] = [
       "TNAU describes egg masses and early larvae feeding gregariously.",
       "Larvae are pale greenish with dark markings; adults have brown forewings with wavy white markings.",
     ],
-    cropStagesAffected: ["Leaf-feeding stages; severe feeding can continue into boll-bearing crop."],
+    cropStagesAffected: [
+      "Leaf-feeding stages; severe feeding can continue into boll-bearing crop.",
+    ],
     monitoringGuidance: [
       "Inspect leaves for egg masses, grouped young larvae and feeding damage; TNAU describes light and pheromone trap monitoring.",
       "Use current local thresholds and expert advice before intervention.",
+    ],
+    prevention: [
+      "Use trap/border crops where locally appropriate and destroy egg masses and grouped young larvae found during scouting.",
+      "Remove and destroy crop debris after harvest.",
+    ],
+    integratedManagement: [
+      "Use light or pheromone traps for monitoring, hand-remove egg masses and young larval clusters, and conserve biological control options.",
+      "TNAU describes NPV as a biological control; use only locally validated products and instructions.",
     ],
     regionRelevance: tnauPestRelevance,
   }),
@@ -394,17 +1279,34 @@ export const cottonIssues: CottonIssue[] = [
       "Inspect cotton bolls and lint for bug presence and the described staining or boll injury; further diagnostic features were not verified.",
     ],
     cropStagesAffected: ["Boll development and maturation."],
+    integratedManagement: [
+      "TNAU describes ploughing to expose eggs; use this cultural measure only at an appropriate crop-cycle stage and confirm locally.",
+    ],
     regionRelevance: tnauPestRelevance,
   }),
   makeIssue({
     id: "dusky-cotton-bug",
     name: "Dusky cotton bug",
+    scientificName: "Oxycarenus hyalinipennis",
     category: "pest",
+    commonSymptoms: [
+      "Bugs feed on developing seeds in open bolls and may stain lint black.",
+      "Seeds may become discolored and shrunken.",
+    ],
+    identificationTips: [
+      "TNAU describes dusky grey-brown bugs with a pointed head and clear wings; eggs may occur in clusters on bolls, flowers or buds.",
+    ],
+    cropStagesAffected: ["Open-boll and seed development."],
   }),
   makeIssue({
     id: "mirid-bug",
     name: "Mirid bug",
     category: "pest",
+    regionRelevance: {
+      region: "Tamil Nadu, India",
+      status: "not_documented_in_reviewed_sources",
+      note: "Not found in the reviewed TNAU cotton pest guide. This does not establish absence from Tamil Nadu.",
+    },
   }),
   makeIssue({
     id: "cotton-leaf-roller",
@@ -419,13 +1321,23 @@ export const cottonIssues: CottonIssue[] = [
       "Larvae are bright green with a dark head and prothoracic shield.",
       "Adults are moths with yellow wings and brown wavy markings.",
     ],
-    cropStagesAffected: ["Leaf growth; a fixed crop-stage window was not verified."],
+    cropStagesAffected: [
+      "Leaf growth; a fixed crop-stage window was not verified.",
+    ],
+    integratedManagement: [
+      "Collect and destroy shed plant parts and hand-pick larger caterpillars during scouting.",
+    ],
     regionRelevance: tnauPestRelevance,
   }),
   makeIssue({
     id: "semi-looper",
     name: "Semi-looper",
     category: "pest",
+    regionRelevance: {
+      region: "Tamil Nadu, India",
+      status: "not_documented_in_reviewed_sources",
+      note: "Not found in the reviewed TNAU cotton pest guide. This does not establish absence from Tamil Nadu.",
+    },
   }),
   makeIssue({
     id: "stem-weevil",
@@ -440,16 +1352,22 @@ export const cottonIssues: CottonIssue[] = [
       "TNAU describes a small, dark adult weevil with two small white patches on the elytra.",
       "The grub is white and legless.",
     ],
-    cropStagesAffected: ["Seedling and young-plant stages; older plants can also be affected."],
+    cropStagesAffected: [
+      "Seedling and young-plant stages; older plants can also be affected.",
+    ],
+    integratedManagement: [
+      "Use locally appropriate organic soil amendments and early crop scouting; confirm diagnosis before considering any treatment.",
+    ],
+    prevention: [
+      "Use locally recommended soil-health practices and check seedlings for stem swelling near the soil line.",
+    ],
     regionRelevance: tnauPestRelevance,
   }),
   makeIssue({
     id: "leaf-reddening",
     name: "Leaf reddening",
     category: "crop_disorder",
-    commonSymptoms: [
-      notVerified("The defining symptom pattern and diagnostic criteria for cotton leaf reddening"),
-    ],
+    commonSymptoms: [],
     identificationTips: [
       "Treat this as a crop disorder, not an infectious disease. Rule out leafhopper injury, nutrient imbalance, water stress and other causes through diagnosis.",
     ],
@@ -463,8 +1381,8 @@ export const cottonIssues: CottonIssue[] = [
     ],
     regionRelevance: {
       region: "India; Tamil Nadu",
-      status: "unverified",
-      note: "Included as a requested cotton disorder; specific regional occurrence and diagnostic details were not verified from the accessible sources.",
+      status: "not_yet_verified",
+      note: "Specific regional occurrence and diagnostic details have not been established; this is not evidence of absence.",
     },
   }),
 ];
@@ -473,5 +1391,6 @@ export const cottonIssueCounts = (issues: CottonIssue[]) => ({
   all: issues.length,
   disease: issues.filter((issue) => issue.category === "disease").length,
   pest: issues.filter((issue) => issue.category === "pest").length,
-  crop_disorder: issues.filter((issue) => issue.category === "crop_disorder").length,
+  crop_disorder: issues.filter((issue) => issue.category === "crop_disorder")
+    .length,
 });

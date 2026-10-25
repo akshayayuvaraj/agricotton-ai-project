@@ -4,6 +4,8 @@ import { api, apiErrorMessage } from "../lib/api";
 import type {
   CottonIssue,
   CottonIssueCategory,
+  CottonIssueSeverityLevel,
+  CottonIssueVerification,
   CottonIssuesResponse,
 } from "../types/cottonIssue";
 
@@ -22,16 +24,107 @@ const categoryFilters: { value: CategoryFilter; label: string }[] = [
   { value: "crop_disorder", label: "Crop Disorders" },
 ];
 
-const DetailList = ({ title, items }: { title: string; items: string[] }) => (
-  <section>
-    <h4 className="font-semibold text-slate-800">{title}</h4>
-    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600">
-      {items.map((item, index) => (
-        <li key={`${title}-${index}`}>{item}</li>
-      ))}
-    </ul>
-  </section>
-);
+const verificationLabels = {
+  verified: "Verified",
+  partially_verified: "Partially verified",
+  unverified: "Needs verification",
+  not_applicable: "Not applicable",
+} as const;
+
+const severityConfig: Record<CottonIssueSeverityLevel, {
+  label: string;
+  badge: string;
+}> = {
+  low: {
+    label: "Low",
+    badge: "rounded-full bg-green-100 border border-green-200 px-2 py-1 text-xs font-bold text-green-800",
+  },
+  moderate: {
+    label: "Moderate",
+    badge: "rounded-full bg-amber-100 border border-amber-200 px-2 py-1 text-xs font-bold text-amber-800",
+  },
+  high: {
+    label: "High",
+    badge: "rounded-full bg-rose-100 border border-rose-200 px-2 py-1 text-xs font-bold text-rose-800",
+  },
+  not_established: {
+    label: "Not established",
+    badge: "rounded-full bg-slate-100 border border-slate-200 px-2 py-1 text-xs font-bold text-slate-800",
+  },
+};
+
+const EvidenceNote = ({
+  verification,
+  issue,
+}: {
+  verification: CottonIssueVerification;
+  issue: CottonIssue;
+}) => {
+  const citedSources = issue.referenceSources.filter((source) =>
+    verification.sourceIds.includes(source.id),
+  );
+
+  return (
+    <div className="mt-2 text-xs text-slate-500">
+      <span className="font-semibold text-slate-700">
+        {verificationLabels[verification.status]}.
+      </span>{" "}
+      {verification.note}
+      {citedSources.length ? (
+        <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+          {citedSources.map((source) => (
+            <a
+              key={source.id}
+              className="font-medium text-field-700 underline"
+              href={source.url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Source: {source.title}
+            </a>
+          ))}
+        </span>
+      ) : null}
+    </div>
+  );
+};
+
+const ClaimSection = ({
+  title,
+  value,
+  verification,
+  issue,
+  missingMessage,
+}: {
+  title: string;
+  value: string | string[];
+  verification: CottonIssueVerification;
+  issue: CottonIssue;
+  missingMessage: string;
+}) => {
+  const values = Array.isArray(value) ? value : value ? [value] : [];
+  return (
+    <section>
+      <h4 className="font-semibold text-slate-800">{title}</h4>
+      {values.length ? (
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600">
+          {values.map((item, index) => (
+            <li key={`${title}-${index}`}>{item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-sm text-slate-600">{missingMessage}</p>
+      )}
+      <EvidenceNote verification={verification} issue={issue} />
+    </section>
+  );
+};
+
+const regionStatusLabels = {
+  documented_in_tamil_nadu: "Documented in Tamil Nadu guidance",
+  not_documented_in_reviewed_sources: "Not documented in reviewed sources",
+  not_yet_verified: "Not yet verified",
+} as const;
 
 const IssueDetails = ({
   issue,
@@ -49,11 +142,15 @@ const IssueDetails = ({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4"
+      onClick={onClose}
+    >
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="cotton-issue-detail-title"
+        onClick={(event) => event.stopPropagation()}
         className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl sm:p-7"
       >
         <div className="flex items-start justify-between gap-4">
@@ -68,8 +165,16 @@ const IssueDetails = ({
               {issue.name}
             </h3>
             <p className="mt-1 text-sm italic text-slate-500">
-              {issue.scientificName ?? "Scientific name not verified"}
+              {issue.scientificName ? (
+                <i>{issue.scientificName}</i>
+              ) : (
+                "No scientific name established in reviewed sources."
+              )}
             </p>
+            <EvidenceNote
+              verification={issue.verification.scientificName}
+              issue={issue}
+            />
           </div>
           <button
             type="button"
@@ -82,44 +187,109 @@ const IssueDetails = ({
         </div>
 
         <div className="mt-5 space-y-5">
-          <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <h4 className="font-semibold text-amber-900">Severity: unverified</h4>
-            <p className="mt-1 text-sm text-amber-800">
-              {issue.severity.explanation}
-            </p>
+          <section className="rounded-xl border p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h4 className="font-semibold text-slate-800">Severity</h4>
+                <p className="mt-1 text-sm text-slate-600">
+                  {issue.severity.explanation}
+                </p>
+              </div>
+              <span
+                className={severityConfig[issue.severity.level].badge}
+                title={issue.severity.explanation}
+              >
+                {severityConfig[issue.severity.level].label}
+              </span>
+            </div>
+            <EvidenceNote
+              verification={issue.verification.severity}
+              issue={issue}
+            />
           </section>
-          <DetailList title="Common symptoms" items={issue.commonSymptoms} />
-          <DetailList title="Identification tips" items={issue.identificationTips} />
-          <section>
-            <h4 className="font-semibold text-slate-800">
-              Favorable conditions
-            </h4>
-            <p className="mt-2 text-sm text-slate-600">
-              {issue.favorableConditions}
-            </p>
-          </section>
-          <DetailList title="Crop stages affected" items={issue.cropStagesAffected} />
-          <DetailList title="Prevention" items={issue.prevention} />
-          <DetailList
+          <ClaimSection
+            title="Common symptoms"
+            value={issue.commonSymptoms}
+            verification={issue.verification.commonSymptoms}
+            issue={issue}
+            missingMessage="Symptoms still need verification; no supported description is available in the reviewed sources."
+          />
+          <ClaimSection
+            title="Identification tips"
+            value={issue.identificationTips}
+            verification={issue.verification.identificationTips}
+            issue={issue}
+            missingMessage="Identification clues need expert review."
+          />
+          <ClaimSection
+            title="Favorable conditions"
+            value={issue.favorableConditions}
+            verification={issue.verification.favorableConditions}
+            issue={issue}
+            missingMessage="No contributing conditions are established in the reviewed sources."
+          />
+          <ClaimSection
+            title="Crop stages affected"
+            value={issue.cropStagesAffected}
+            verification={issue.verification.cropStagesAffected}
+            issue={issue}
+            missingMessage="Affected growth stages have not been established in the reviewed sources."
+          />
+          <ClaimSection
+            title="Prevention"
+            value={issue.prevention}
+            verification={issue.verification.prevention}
+            issue={issue}
+            missingMessage="No prevention information is available."
+          />
+          <ClaimSection
             title="Integrated management"
-            items={issue.integratedManagement}
+            value={issue.integratedManagement}
+            verification={issue.verification.integratedManagement}
+            issue={issue}
+            missingMessage="No issue-specific integrated-management information is available."
           />
-          <DetailList
+          <ClaimSection
             title="Monitoring guidance"
-            items={issue.monitoringGuidance}
+            value={issue.monitoringGuidance}
+            verification={issue.verification.monitoringGuidance}
+            issue={issue}
+            missingMessage="No issue-specific monitoring guidance is available."
           />
+          {issue.causalOrganisms.length ? (
+            <ClaimSection
+              title="Reported causal organisms"
+              value={issue.causalOrganisms}
+              verification={issue.verification.causalOrganisms}
+              issue={issue}
+              missingMessage="No causal organisms are established."
+            />
+          ) : null}
           <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <h4 className="font-semibold text-slate-800">
               Regional relevance: {issue.regionRelevance.region}
             </h4>
             <p className="mt-1 text-sm text-slate-600">
-              {issue.regionRelevance.status === "verified"
-                ? "Source-listed"
-                : "Not verified"}
-              {" — "}
+              {regionStatusLabels[issue.regionRelevance.status]}.{" "}
               {issue.regionRelevance.note}
             </p>
+            <EvidenceNote
+              verification={issue.verification.tamilNaduOccurrence}
+              issue={issue}
+            />
           </section>
+          {issue.diagnosticNotes.length ? (
+            <section>
+              <h4 className="font-semibold text-slate-800">
+                Diagnostic limitations
+              </h4>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600">
+                {issue.diagnosticNotes.map((note, index) => (
+                  <li key={`diagnostic-note-${index}`}>{note}</li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
           <section>
             <h4 className="font-semibold text-slate-800">References</h4>
             <ul className="mt-2 space-y-2 text-sm">
@@ -133,7 +303,10 @@ const IssueDetails = ({
                   >
                     {source.title}
                   </a>
-                  <p className="text-slate-600">{source.notes}</p>
+                  <p className="text-slate-600">
+                    {source.publisher} · Accessed {source.accessedAt}.{" "}
+                    {source.notes}
+                  </p>
                 </li>
               ))}
             </ul>
@@ -170,7 +343,9 @@ export const CottonIssueGuide = () => {
       .then((response) => setData(response.data))
       .catch((requestError: unknown) => {
         if (!controller.signal.aborted) {
-          setError(apiErrorMessage(requestError, "Unable to load the cotton library."));
+          setError(
+            apiErrorMessage(requestError, "Unable to load the cotton library."),
+          );
         }
       })
       .finally(() => {
@@ -214,7 +389,10 @@ export const CottonIssueGuide = () => {
         </div>
       ) : null}
 
-      <section className="card space-y-4 p-4 sm:p-5" aria-label="Library filters">
+      <section
+        className="card space-y-4 p-4 sm:p-5"
+        aria-label="Library filters"
+      >
         <label className="relative block">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
@@ -252,7 +430,10 @@ export const CottonIssueGuide = () => {
               aria-label="Filter by severity"
             >
               <option value="all">All ratings</option>
-              <option value="unverified">Unverified rating</option>
+              <option value="low">Low</option>
+              <option value="moderate">Moderate</option>
+              <option value="high">High</option>
+              <option value="not_established">Not established</option>
             </select>
           </label>
         </div>
@@ -275,7 +456,8 @@ export const CottonIssueGuide = () => {
         </div>
       ) : data && data.issues.length === 0 ? (
         <p className="card p-5 text-sm text-slate-600" role="status">
-          No records match these search and filter choices.
+          No cotton issues match your search and filters. Try adjusting the
+          search term or clearing the category and severity filters.
         </p>
       ) : (
         <>
@@ -295,24 +477,36 @@ export const CottonIssueGuide = () => {
                       {issue.name}
                     </h3>
                     <p className="mt-1 text-sm italic text-slate-500">
-                      {issue.scientificName ?? "Scientific name not verified"}
+                      {issue.scientificName ? (
+                        <i>{issue.scientificName}</i>
+                      ) : (
+                        "Scientific name not established"
+                      )}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {
+                        verificationLabels[
+                          issue.verification.scientificName.status
+                        ]
+                      }{" "}
+                      scientific name
                     </p>
                   </div>
-                  <span
-                    className="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800"
-                    title={issue.severity.explanation}
-                  >
-                    Unverified severity
-                  </span>
+                <span
+                  className={`shrink-0 ${severityConfig[issue.severity.level].badge}`}
+                  title={issue.severity.explanation}
+                >
+                  {severityConfig[issue.severity.level].label}
+                </span>
                 </div>
                 <p className="mt-4 line-clamp-3 text-sm text-slate-600">
-                  {issue.commonSymptoms.join(" ")}
+                  {issue.commonSymptoms.length
+                    ? issue.commonSymptoms.join(" ")
+                    : "Symptoms need verification in reliable issue-specific sources."}
                 </p>
                 <p className="mt-3 text-xs text-slate-500">
                   Regional status:{" "}
-                  {issue.regionRelevance.status === "verified"
-                    ? "listed in TNAU guide"
-                    : "not verified"}
+                  {regionStatusLabels[issue.regionRelevance.status]}
                 </p>
                 <button
                   type="button"
